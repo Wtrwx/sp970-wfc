@@ -108,6 +108,7 @@ func preserveSMSSecrets(c, old smsForwardConfig) smsForwardConfig {
 		c.Headers, c.SecretHeaders, c.Secrets = old.Headers, old.SecretHeaders, old.Secrets
 		c.Success, c.SuccessPath, c.SuccessValue = old.Success, old.SuccessPath, old.SuccessValue
 		c.CheckEndpoint, c.Timeout = old.CheckEndpoint, old.Timeout
+		c.FormFields = old.FormFields
 	}
 	if c.ClearAuth {
 		c.Authorization = ""
@@ -246,19 +247,25 @@ func smsForwardRequest(ctx context.Context, config smsForwardConfig, j smsForwar
 	switch c.Format {
 	case "form":
 		values := url.Values{}
-		for _, line := range strings.Split(c.Body, "\n") {
-			if strings.TrimSpace(line) == "" {
-				continue
+		fields := c.FormFields
+		if fields == nil {
+			for _, line := range strings.Split(c.Body, "\n") {
+				if strings.TrimSpace(line) == "" {
+					continue
+				}
+				key, template, ok := strings.Cut(line, "=")
+				if !ok || strings.TrimSpace(key) == "" {
+					return nil, errors.New("表单模板应每行填写 字段=值")
+				}
+				fields = append(fields, smsForwardField{Name: strings.TrimSpace(key), Value: template})
 			}
-			key, template, ok := strings.Cut(line, "=")
-			if !ok || strings.TrimSpace(key) == "" {
-				return nil, errors.New("表单模板应每行填写 字段=值")
-			}
-			value, err := renderSMSTemplate(template, c, j, "")
+		}
+		for _, field := range fields {
+			value, err := renderSMSTemplate(field.Value, c, j, "")
 			if err != nil {
 				return nil, err
 			}
-			values.Add(strings.TrimSpace(key), value)
+			values.Add(field.Name, value)
 		}
 		body, contentType = values.Encode(), "application/x-www-form-urlencoded"
 	case "json":
@@ -314,6 +321,14 @@ func validateSMSRequest(config smsForwardConfig) error {
 	}
 	if len(c.Body) > 16384 || len(c.Headers) > 32 || len(c.Secrets) > 32 {
 		return errors.New("请求模板或参数过长")
+	}
+	if len(c.FormFields) > 64 {
+		return errors.New("表单字段过多")
+	}
+	for _, field := range c.FormFields {
+		if field.Name == "" || strings.ContainsAny(field.Name, "\r\n") || len(field.Value) > 16384 {
+			return errors.New("表单字段无效")
+		}
 	}
 	for key, value := range c.Secrets {
 		if !smsSecretName.MatchString(key) || value == "" || len(value) > 4096 {
@@ -397,8 +412,12 @@ func smsForwardAccepted(c smsForwardConfig, raw []byte) bool {
 
 func (f *smsForwarder) preview(c smsForwardConfig) (map[string]any, error) {
 	f.mu.Lock()
-	c = preserveSMSSecrets(c, f.config)
+	var err error
+	c, err = prepareSMSForwardConfig(c, f.config)
 	f.mu.Unlock()
+	if err != nil {
+		return nil, err
+	}
 	if err := validateSMSForwardConfig(c); err != nil {
 		return nil, err
 	}
@@ -431,7 +450,9 @@ func (f *smsForwarder) preview(c smsForwardConfig) (map[string]any, error) {
 	headers := map[string]string{}
 	for key := range req.Header {
 		value := req.Header.Get(key)
-		if sensitiveSMSHeader(c, key) {
+		if strings.EqualFold(key, "Authorization") {
+			// Authorization remains editable and copyable in the cURL editor and preview.
+		} else if sensitiveSMSHeader(c, key) {
 			value = smsSecretMask
 		} else {
 			value = redact(value)

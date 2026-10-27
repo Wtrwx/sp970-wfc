@@ -23,6 +23,7 @@ import (
 )
 
 type smsForwardConfig struct {
+	Curl          string            `json:"curl,omitempty"`
 	Enabled       bool              `json:"enabled"`
 	Endpoint      string            `json:"endpoint"`
 	Authorization string            `json:"authorization"`
@@ -39,6 +40,12 @@ type smsForwardConfig struct {
 	CheckEndpoint string            `json:"check_endpoint,omitempty"`
 	Timeout       int               `json:"timeout_seconds,omitempty"`
 	ClearAuth     bool              `json:"clear_authorization,omitempty"`
+	FormFields    []smsForwardField `json:"form_fields,omitempty"`
+}
+
+type smsForwardField struct {
+	Name  string `json:"name"`
+	Value string `json:"value"`
 }
 
 type smsForwardJob struct {
@@ -317,9 +324,11 @@ func maskedSMSForwardEndpoint(value string) string {
 		return value
 	}
 	q := u.Query()
+	var variables []string
 	for key, values := range q {
 		for i := range values {
 			if match := smsVariable.FindString(values[i]); match == values[i] && match != "" {
+				variables = append(variables, match)
 				continue
 			}
 			values[i] = "********"
@@ -327,6 +336,9 @@ func maskedSMSForwardEndpoint(value string) string {
 		q[key] = values
 	}
 	u.RawQuery = strings.ReplaceAll(q.Encode(), "%2A", "*")
+	for _, variable := range variables {
+		u.RawQuery = strings.ReplaceAll(u.RawQuery, url.QueryEscape(variable), variable)
+	}
 	return u.String()
 }
 
@@ -335,6 +347,7 @@ func (f *smsForwarder) view() map[string]any {
 	defer f.mu.Unlock()
 	c := normalizeSMSRequest(f.config)
 	view := map[string]any{
+		"curl": smsForwardCurl(c), "form_fields": c.FormFields,
 		"enabled": c.Enabled, "endpoint": maskedSMSForwardEndpoint(c.Endpoint),
 		"authorization_masked":     maskedSMSAuthorization(c.Authorization),
 		"authorization_configured": c.Authorization != "", "method": c.Method,
@@ -373,7 +386,11 @@ func (f *smsForwarder) view() map[string]any {
 func (f *smsForwarder) save(c smsForwardConfig) error {
 	f.mu.Lock()
 	defer f.mu.Unlock()
-	c = preserveSMSSecrets(c, f.config)
+	var err error
+	c, err = prepareSMSForwardConfig(c, f.config)
+	if err != nil {
+		return err
+	}
 	if err := validateSMSForwardConfig(c); err != nil {
 		return err
 	}

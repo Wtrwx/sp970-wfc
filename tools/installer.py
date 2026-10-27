@@ -112,6 +112,32 @@ def patch_native_html(text: str) -> str:
     return text[:match.end()] + '\n<script src="/wfc-native-sms.js"></script>' + text[match.end():]
 
 
+def patch_sms_navigation(text: str) -> str:
+    if re.search(r'href=["\']wfc-panel\.html#forward["\']', text):
+        return text
+    anchor = re.search(r'(?is)<li\b[^>]*>\s*<a\b[^>]*href=["\']sms-set\.html["\'][^>]*>.*?</a>\s*</li>', text)
+    if not anchor:
+        raise ValueError("不支持该短信页面：找不到设置菜单，未改动文件")
+    item = '\n<li><a href="wfc-panel.html#forward">短信转发</a></li>'
+    return text[:anchor.end()] + item + text[anchor.end():]
+
+
+def restore_added_native_pages(backup: str) -> str:
+    # v0.1 backups did not manage these pages. Find their first snapshot after
+    # the original installation, so an upgrade can still uninstall cleanly.
+    return f'''BB=/system/xbin/busybox
+for N in sms-set.html sms-sim.html; do
+  SEEN=0
+  for D in {BASE}/backups/????????T??????Z; do
+    if [ "$D" = {backup} ]; then SEEN=1; fi
+    [ "$SEEN" = 1 ] || continue
+    if [ -f "$D/$N.absent" ]; then rm -f {WWW}/$N; break; fi
+    if [ -f "$D/$N" ]; then "$BB" cp -p "$D/$N" {WWW}/$N; break; fi
+  done
+done
+{reload_native_nginx()}'''
+
+
 def reload_native_nginx() -> str:
     # HUP the verified native master only. Keep the listener available even for
     # --no-start installs and when restoring the original configuration.
@@ -178,9 +204,14 @@ def install(adb: Adb, config: dict, payload: Path, *, start=True, wait_seconds=1
     print("[1/5] 检查设备、飞行模式和 Wi-Fi…")
     preflight(adb)
     original_nginx = adb.shell(f"cat {NGINX}") + "\n"
-    original_html = {name: adb.shell(f"cat {WWW}/{name}") + "\n" for name in ("login.html", "sms-device.html")}
+    original_html = {name: adb.shell(f"cat {WWW}/{name}") + "\n" for name in ("login.html", "sms-device.html", "sms-set.html", "sms-sim.html")}
     patched = {"nginx.conf": patch_nginx(original_nginx)}
-    patched.update({name: patch_native_html(text) for name, text in original_html.items()})
+    for name, text in original_html.items():
+        if name in ("login.html", "sms-device.html"):
+            text = patch_native_html(text)
+        if name.startswith("sms-"):
+            text = patch_sms_navigation(text)
+        patched[name] = text
     stage = "/data/local/tmp/sp970-wfc-install-" + secrets.token_hex(6)
     backup = BASE + "/backups/" + datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
     old_control = adb.shell(f"if [ -f {BASE}/service-control.sh ]; then echo yes; fi") == "yes"
@@ -218,7 +249,7 @@ def install(adb: Adb, config: dict, payload: Path, *, start=True, wait_seconds=1
             f"{BASE}/bin/sp970_uim_bridge": "sp970_uim_bridge", f"{BASE}/bin/sp970_ims_xfrm": "sp970_ims_xfrm",
             f"{BASE}/service-control.sh": "service-control.sh", BOOT: "90-sp970-wfc.sh",
             f"{BASE}/ca-roots.pem": "ca-roots.pem", NGINX: "nginx.conf",
-            f"{WWW}/login.html": "login.html", f"{WWW}/sms-device.html": "sms-device.html",
+            **{f"{WWW}/{name}": name for name in original_html},
             f"{WWW}/wfc-panel.html": "wfc-panel.html", f"{WWW}/wfc-panel.js": "wfc-panel.js",
             f"{WWW}/forward-editor.js": "forward-editor.js",
             f"{WWW}/wfc-native-sms.js": "native-sms.js", f"{BASE}/network-mode": "network-mode",
@@ -321,6 +352,7 @@ def main(argv=None) -> int:
             if not re.fullmatch(re.escape(BASE) + r"/backups/\d{8}T\d{6}Z", backup):
                 raise ValueError("找不到受信任的卸载备份路径，未删除任何文件")
             print(adb.shell(f"/system/bin/sh {backup}/rollback.sh", timeout=120))
+            adb.shell(restore_added_native_pages(backup))
             print("已恢复安装前的程序和页面。短信、转发配置及本机备份保留在 " + BASE)
         return 0
     except (OSError, ValueError, RuntimeError, subprocess.SubprocessError) as exc:

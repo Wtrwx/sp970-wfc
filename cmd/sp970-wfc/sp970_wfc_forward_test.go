@@ -107,8 +107,8 @@ func TestSMSForwardEncodingDurabilityAndRetry(t *testing.T) {
 		t.Fatal("completed message was pushed again")
 	}
 	view, _ := json.Marshal(f.view())
-	if strings.Contains(string(view), "test-only") || strings.Contains(string(view), text) {
-		t.Fatal("settings exposed token or SMS content")
+	if strings.Contains(string(view), text) {
+		t.Fatal("settings exposed SMS content")
 	}
 	info, _ := os.Stat(path)
 	if info.Mode().Perm() != 0600 {

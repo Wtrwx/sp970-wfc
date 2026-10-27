@@ -26,7 +26,7 @@ sh -n service/service-control.sh service/90-sp970-wfc.sh
 ```sh
 python3 tools/build.py --go /path/to/go1.26.7 \
   --hysteria-go /path/to/go1.25.6 \
-  --ndk /path/to/android-ndk-r27c --version v0.1.0 --test
+  --ndk /path/to/android-ndk-r27c --version v0.2.0 --test
 ```
 
 产物在 `dist/`，包含 SHA256SUMS、独立二进制、安装工具、WebUI、许可证和对应源代码。NDK 以 API 21 头文件编译，使用 KitKat 已验证的 ARM32 vendor ABI、SysV ELF hash 和无分离 rosegment 链接参数；不能由 API 号推断已支持所有 Android 版本。

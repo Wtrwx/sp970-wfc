@@ -26,7 +26,7 @@ SIM 必须先在原生后台保持飞行模式、Wi-Fi 开启。工具只读取�
 
 电脑需要 Python 3.10+ 和 [Android Platform Tools / adb](https://developer.android.com/tools/releases/platform-tools)。Windows 可用 `py -3` 替代 `python3`。
 
-1. 下载 Releases 中的 `sp970-wfc-v0.1.0-android-armv7.zip`，解压。
+1. 下载 Releases 中的 `sp970-wfc-v0.2.0-android-armv7.zip`，解压。
 2. 棒子插好 SIM，开启飞行模式，连接已保存的 Wi-Fi，通过 USB 允许 ADB/root。
 3. 在解压目录运行：
 
@@ -48,13 +48,20 @@ http://<棒子的Wi-Fi地址>/wfc-panel.html
 
 ## 短信转发
 
-在面板自定义请求方式（GET / POST / PUT / PATCH / DELETE）、HTTPS 地址、请求头和表单 / JSON / 文本模板。支持号码、正文、时间、消息 ID 及私有密钥变量；预览只渲染示例，不向接收服务发送请求。
+页面只需要开启转发、粘贴一段 **cURL 命令**、保存。现有配置会自动显示成 cURL，支持多行、请求头、JSON、表单与短信变量，无需逐项填写参数。
 
-已保存的鉴权、敏感请求头、密钥变量和 URL 查询参数用星号显示；直接保存星号不会覆盖真实参数，留空也会保留已有鉴权。成功判定可选任意 2xx、`accepted=true` 或自定义 JSON 字段匹配。详见 [自定义转发说明](docs/FORWARDING.md)。
+```sh
+curl -X POST 'https://sms.example.com/v1/sms' \
+  -H 'Authorization: Bearer YOUR_TOKEN' \
+  --data-urlencode 'from={{sms-from}}' \
+  --data-urlencode 'body={{sms-body}}'
+```
+
+Authorization 在命令和预览中显示完整值，方便编辑和复制。其他敏感请求头、密钥变量和 URL 查询参数用星号显示，直接保存会保留真实参数。删除命令中的 Authorization 请求头会移除该鉴权。页面仅保留开关、命令框和保存按钮，保存时沿用已有成功判定和密钥变量。详见 [cURL 转发说明](docs/FORWARDING.md)。
 
 工具只转发启用后收到的新短信，先保存到本机，再写入持久队列，失败自动重试，重复消息按稳定 ID 去重。**不会导出历史收件箱。**
 
-兼容表单预设保持原来的 HTTPS POST 格式：
+原有配置仍保持原来的 HTTPS POST 表单格式：
 
 | 字段 | 内容 |
 | --- | --- |
@@ -63,7 +70,7 @@ http://<棒子的Wi-Fi地址>/wfc-panel.html
 | `body` | JSON 转义后的短信正文，再进行表单编码 |
 | `ufi_escaped` | 固定 `1` |
 
-此预设成功时返回 2xx 和 `{"accepted":true}`。`/v1/sms` 配套的只读连接检查访问 `/v1/status`，不会推送测试短信。可直接部署仓库内的 [可选 ntfy 网关](extras/sms-gateway/README.md)。
+原接收器成功时返回 2xx 和 `{"accepted":true}`。`/v1/sms` 配套的只读连接检查访问 `/v1/status`，不会推送测试短信。可直接部署仓库内的 [可选 ntfy 网关](extras/sms-gateway/README.md)。
 
 ## 常用命令
 

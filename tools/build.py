@@ -36,7 +36,7 @@ def main():
     p.add_argument("--go", default="go", help="Go 1.26.4+ for the WFC runtime")
     p.add_argument("--hysteria-go", default="go", help="Go 1.25.6 recommended for the pinned Hysteria source")
     p.add_argument("--ndk", type=Path, default=Path(os.environ.get("ANDROID_NDK_HOME", "")))
-    p.add_argument("--version", default="v0.1.0")
+    p.add_argument("--version", default="v0.2.0")
     p.add_argument("--test", action="store_true")
     args = p.parse_args()
     host = "darwin-x86_64" if platform.system() == "Darwin" else "linux-x86_64"
