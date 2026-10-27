@@ -5,7 +5,7 @@ import tempfile
 import unittest
 
 from tools.configure import parse_node, validate, save_private
-from tools.installer import patch_nginx, patch_native_html, verify_payload, rollback_script
+from tools.installer import patch_nginx, verify_payload, rollback_script, console_redirect, CONSOLE_ASSETS
 
 
 class ConfigurationTests(unittest.TestCase):
@@ -68,13 +68,26 @@ class NativeIntegrationTests(unittest.TestCase):
         self.assertIn("location /sl4a", patched)
         self.assertIn("client_max_body_size 64k", patched)
 
-    def test_native_login_hook_loads_after_common_without_replacing_vendor_html(self):
-        original = '<script src="./js/common.js"></script>\n<script>nativeLogin()</script>'
-        patched = patch_native_html(original)
-        self.assertLess(patched.index("common.js"), patched.index("wfc-native-sms.js"))
-        self.assertLess(patched.index("wfc-native-sms.js"), patched.index("nativeLogin()"))
-        self.assertEqual(patch_native_html(patched), patched)
-        with self.assertRaises(ValueError): patch_native_html("<html>unknown firmware</html>")
+    def test_management_upgrade_keeps_workers_unprivileged_and_adds_one_route(self):
+        original = "master_process off;\nhttp {server {\n# SP970-WFC managed API\nlocation /wfc/ {proxy_pass http://127.0.0.1:17892/;}\nlocation / {root /system/var/www;}\n}}\n"
+        patched = patch_nginx(original)
+        self.assertIn("master_process on;", patched)
+        self.assertIn("user nobody inet;", patched)
+        self.assertNotIn("user root;", patched)
+        self.assertEqual(patched.count("location /wfc-admin/"), 1)
+        self.assertEqual(patch_nginx(patched), patched)
+
+    def test_console_owns_home_and_login_and_legacy_urls_share_the_same_app(self):
+        root = Path(__file__).resolve().parents[1]
+        self.assertIn("index.html", CONSOLE_ASSETS)
+        self.assertIn("login.html", CONSOLE_ASSETS)
+        for name in ("index.html", "login.html"):
+            text = (root / "web" / name).read_text()
+            self.assertNotIn("<iframe", text)
+            self.assertNotIn("common.js", text)
+            self.assertIn("/app.js", text)
+        self.assertIn('/index.html#sms', console_redirect("sms"))
+        with self.assertRaises(ValueError): console_redirect('";unexpected()')
 
     def test_payload_rejects_tampering_and_directory_traversal(self):
         with tempfile.TemporaryDirectory() as t:

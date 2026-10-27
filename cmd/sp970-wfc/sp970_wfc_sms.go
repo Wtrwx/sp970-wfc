@@ -295,13 +295,10 @@ func (h *imsSMSHost) send(ctx context.Context, to, text string) (int, error) {
 
 func (h *imsSMSHost) authorized(r *http.Request) bool {
 	value := strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer ")
-	if subtle.ConstantTimeCompare([]byte(value), []byte(h.token)) == 1 {
+	if value != "" && subtle.ConstantTimeCompare([]byte(value), []byte(h.token)) == 1 {
 		return true
 	}
-	h.mu.Lock()
-	defer h.mu.Unlock()
-	until, ok := h.sessions[value]
-	return ok && time.Now().Before(until)
+	return sharedUIAuthorized(value)
 }
 
 func nativeUIAuthenticate(ctx context.Context, account, password string) bool {
@@ -364,23 +361,7 @@ func (h *imsSMSHost) api(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Cache-Control", "no-store")
 	r.Body = http.MaxBytesReader(w, r.Body, 65536)
 	if r.URL.Path == "/login" && r.Method == "POST" {
-		var credentials struct{ Account, Password string }
-		if json.NewDecoder(r.Body).Decode(&credentials) != nil || !nativeUIAuthenticate(r.Context(), credentials.Account, credentials.Password) {
-			http.Error(w, `{"error":"login failed"}`, 401)
-			return
-		}
-		var b [32]byte
-		_, err := rand.Read(b[:])
-		if err != nil {
-			http.Error(w, `{}`, 500)
-			return
-		}
-		token := hex.EncodeToString(b[:])
-		h.mu.Lock()
-		h.sessions[token] = time.Now().Add(8 * time.Hour)
-		_ = privateJSON("/data/adb/sp970-wfc/ui-sessions.json", h.sessions)
-		h.mu.Unlock()
-		_ = json.NewEncoder(w).Encode(map[string]string{"token": token})
+		uiLogin(w, r)
 		return
 	}
 	if !h.authorized(r) {

@@ -179,7 +179,31 @@ func smsForwardID(from, text string, at time.Time) string {
 	return hex.EncodeToString(id[:])
 }
 
+// The independent manager may save settings while IMS is offline. Active IMS
+// workers refresh the same atomic file before queueing or delivering messages.
+func (f *smsForwarder) reloadSaved() error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	raw, err := os.ReadFile(filepath.Join(f.dir, "config.json"))
+	if os.IsNotExist(err) {
+		return nil
+	}
+	if err != nil {
+		return errors.New("无法读取转发设置")
+	}
+	defer clear(raw)
+	var config smsForwardConfig
+	if json.Unmarshal(raw, &config) != nil || validateSMSForwardConfig(config) != nil {
+		return errors.New("转发设置无效")
+	}
+	f.config = normalizeSMSRequest(config)
+	return nil
+}
+
 func (f *smsForwarder) enqueue(from, text string, at time.Time) error {
+	if err := f.reloadSaved(); err != nil {
+		return err
+	}
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	// Enabling forwarding never exports the existing inbox or old network retries.
@@ -239,6 +263,9 @@ func (f *smsForwarder) deliver(ctx context.Context, c smsForwardConfig, j smsFor
 }
 
 func (f *smsForwarder) deliverDue(ctx context.Context) {
+	if f.reloadSaved() != nil {
+		return
+	}
 	f.mu.Lock()
 	c := f.config
 	f.mu.Unlock()

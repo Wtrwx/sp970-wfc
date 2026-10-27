@@ -178,3 +178,35 @@ func TestSMSForwardMaskedSettingsPreserveRealCredentials(t *testing.T) {
 		t.Fatal("saving displayed stars overwrote real credentials")
 	}
 }
+
+// No external request is made: an IMS worker must see changes saved by the
+// independent manager before it queues a newly received message.
+func TestForwardManagerChangesApplyToExistingWorker(t *testing.T) {
+	dir := t.TempDir()
+	worker, err := newSMSForwarder(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	manager, err := newSMSForwarder(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = manager.save(smsForwardConfig{Enabled: true, Endpoint: "https://example.invalid/incoming", Authorization: "Bearer test-only"}); err != nil {
+		t.Fatal(err)
+	}
+	if err = worker.enqueue("+12345678901", "first", time.Now()); err != nil {
+		t.Fatal(err)
+	}
+	if worker.view()["pending"] != 1 {
+		t.Fatal("running worker did not load manager configuration")
+	}
+	if err = manager.save(smsForwardConfig{Enabled: false, Endpoint: "https://example.invalid/incoming", Authorization: "Bearer test-only"}); err != nil {
+		t.Fatal(err)
+	}
+	if err = worker.enqueue("+12345678901", "second", time.Now()); err != nil {
+		t.Fatal(err)
+	}
+	if worker.view()["pending"] != 1 {
+		t.Fatal("disabled forwarding queued a new message")
+	}
+}

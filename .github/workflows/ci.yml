@@ -22,7 +22,7 @@ jobs:
       - run: python3 -m unittest discover -s tests -v
       - run: python3 -m unittest discover -s extras/sms-gateway -v
       - run: sh -n service/service-control.sh service/90-sp970-wfc.sh
-      - run: node --check web/wfc-panel.js && node --check web/native-sms.js && node --check web/forward-editor.js
+      - run: node --check web/app.js && node --check web/forward-editor.js
 
   release:
     if: startsWith(github.ref, 'refs/tags/v')
@@ -43,10 +43,10 @@ jobs:
           go-version: 1.26.7
       - name: Install fixed Android NDK
         run: |
-          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "ndk;27.2.12479018"
+          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "ndk;27.2.12479018" "platforms;android-34" "build-tools;34.0.0"
           echo "ANDROID_NDK_HOME=$ANDROID_HOME/ndk/27.2.12479018" >> "$GITHUB_ENV"
       - name: Build release from the pinned sources
-        run: python3 tools/build.py --go "$(command -v go)" --hysteria-go "$PROXY_GO" --ndk "$ANDROID_NDK_HOME" --version "$GITHUB_REF_NAME"
+        run: python3 tools/build.py --go "$(command -v go)" --hysteria-go "$PROXY_GO" --ndk "$ANDROID_NDK_HOME" --android-sdk "$ANDROID_HOME" --version "$GITHUB_REF_NAME"
       - name: Publish binaries, source and checksums
         env:
           GH_TOKEN: ${{ github.token }}

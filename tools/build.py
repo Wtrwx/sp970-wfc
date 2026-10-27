@@ -36,7 +36,8 @@ def main():
     p.add_argument("--go", default="go", help="Go 1.26.4+ for the WFC runtime")
     p.add_argument("--hysteria-go", default="go", help="Go 1.25.6 recommended for the pinned Hysteria source")
     p.add_argument("--ndk", type=Path, default=Path(os.environ.get("ANDROID_NDK_HOME", "")))
-    p.add_argument("--version", default="v0.2.0")
+    p.add_argument("--version", default="v0.3.0")
+    p.add_argument("--android-sdk", type=Path, default=Path(os.environ.get("ANDROID_HOME", os.environ.get("ANDROID_SDK_ROOT", str(Path.home()/"Library/Android/sdk")))))
     p.add_argument("--test", action="store_true")
     args = p.parse_args()
     host = "darwin-x86_64" if platform.system() == "Darwin" else "linux-x86_64"
@@ -55,10 +56,24 @@ def main():
     target = env | {"GOOS": "linux", "GOARCH": "arm", "GOARM": "7", "CGO_ENABLED": "0"}
     run([args.go, "build", "-trimpath", "-buildvcs=false", "-ldflags", f"-s -w -X main.buildVersion={args.version}",
          "-o", payload / "bin/sp970-wfc", "./cmd/sp970-wfc"], cwd=ROOT, env=target)
-    for name in ("sp970_uim_bridge", "sp970_ims_xfrm"):
+    for name in ("sp970_uim_bridge", "sp970_ims_xfrm", "sp970_euicc_bridge"):
         run([compiler, "-std=c11", "-O2", "-Wall", "-Wextra", "-Werror", "-fPIE", "-pie",
              "-Wl,--hash-style=sysv", "-Wl,--no-rosegment", "-Wl,--build-id=none",
              ROOT / f"native/{name}.c", "-ldl", "-o", payload / f"bin/{name}"])
+    sdk = args.android_sdk
+    android_jar = sdk / "platforms/android-34/android.jar"
+    d8 = sdk / "build-tools/34.0.0/d8"
+    if not android_jar.is_file() or not d8.is_file():
+        p.error("请安装 Android SDK platforms;android-34 与 build-tools;34.0.0，并传入 --android-sdk")
+    java_home = Path(os.environ.get("JAVA_HOME", "/usr"))
+    java_classes = ROOT / "dist/android-classes"
+    java_classes.mkdir(parents=True, exist_ok=True)
+    run([java_home/"bin/javac", "-source", "8", "-target", "8", "-Xlint:-options", "-cp", android_jar,
+         "-d", java_classes, ROOT/"native/Sp970Android.java"])
+    java_dex = ROOT / "dist/android-dex"
+    java_dex.mkdir(parents=True, exist_ok=True)
+    run([d8, "--min-api", "19", "--lib", android_jar, "--output", java_dex, java_classes/"Sp970Android.class"])
+    copy(java_dex/"classes.dex", payload/"bin/sp970_android.dex")
     hy = ROOT / "third_party/hysteria/app"
     if "TableIndex:               20220" not in (hy / "internal/tun/server.go").read_text():
         raise SystemExit("Missing documented ARM32 TUN compatibility patch")

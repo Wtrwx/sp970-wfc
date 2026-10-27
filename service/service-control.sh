@@ -39,7 +39,10 @@ matches() {
     case "$1:$OEXE" in
         proxy:$PROXY|proxy:/data/local/tmp/sp970_hysteria_stable_tun)
             case " $OCMD " in *" client "*" -c $CONFIG "*) return 0;; esac;;
-        wfc:$WFC|wfc:/data/local/tmp/sp970_wfc_preflight) return 0;;
+        wfc:$WFC|wfc:/data/local/tmp/sp970_wfc_preflight)
+            case " $OCMD " in *" --admin "*) return 1;; *) return 0;; esac;;
+        admin:$WFC)
+            case " $OCMD " in *" --admin "*) return 0;; esac;;
         supervisor:/system/bin/mksh|supervisor:/system/bin/sh)
             case " $OCMD " in *" $SELF supervise "*) return 0;; esac;;
     esac
@@ -48,7 +51,7 @@ matches() {
 
 owned() {
     [ -r "$RUN/$1.pid" ] || return 1
-    matches "$1" "$(cat "$RUN/$1.pid")"
+    matches "$1" "$(cat "$RUN/$1.pid" 2>/dev/null)"
 }
 
 adopt() {
@@ -200,6 +203,7 @@ supervise() {
     NEXT_WFC=0
     PREVIOUS_GATEWAY=
     while [ ! -e "$BASE/disabled" ]; do
+        owned admin || start_admin
         if [ "$(getprop sys.boot_completed)" != 1 ]; then
             set_state 'waiting: Android boot'
         elif [ "$(settings get global airplane_mode_on)" != 1 ]; then
@@ -254,13 +258,14 @@ supervise() {
 
 status() {
     if [ -e "$BASE/disabled" ]; then echo 'autostart disabled'; else echo 'autostart enabled'; fi
-    for ROLE in supervisor proxy wfc; do
+    for ROLE in admin supervisor proxy wfc; do
         if owned "$ROLE"; then echo "$ROLE running pid=$OPID"; else echo "$ROLE stopped"; fi
     done
     [ ! -r "$RUN/state" ] || cat "$RUN/state"
 }
 
 start() {
+    start_admin || return 1
     [ ! -e "$BASE/disabled" ] || { echo 'autostart disabled'; return 1; }
     if ! owned supervisor; then
         "$BB" nohup "$BB" setsid "$BB" flock -n "$RUN/service.lock" \
@@ -273,14 +278,29 @@ start() {
     owned supervisor
 }
 
+start_admin() {
+    ensure_webui || return 1
+    if ! owned admin; then
+        "$BB" nohup "$BB" setsid "$BB" flock -n "$RUN/admin.lock" \
+            "$WFC" --admin >>"$LOG/admin.log" 2>&1 </dev/null &
+        sleep 1
+    fi
+    owned admin
+}
+
 case "$1" in
     start) start;;
     supervise) supervise;;
     status) status;;
+    admin) start_admin;;
+    stop-admin) stop_role admin;;
+    pause)
+        if owned supervisor; then kill -TERM "$OPID"; fi
+        echo 'runtime stopping; autostart preference retained';;
     enable) rm -f "$BASE/disabled"; start;;
     disable)
         touch "$BASE/disabled"
         if owned supervisor; then kill -TERM "$OPID"; fi
         echo 'autostart disabled; owned runtime is stopping';;
-    *) echo 'Usage: service-control.sh start|status|enable|disable'; exit 2;;
+    *) echo 'Usage: service-control.sh start|status|enable|disable|admin|stop-admin|pause'; exit 2;;
 esac

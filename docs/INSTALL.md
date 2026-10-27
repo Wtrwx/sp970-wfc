@@ -33,14 +33,16 @@ python3 setup.py enable
 
 | 位置 | 内容 |
 | --- | --- |
-| `/data/adb/sp970-wfc/bin/` | 自有运行程序和只读 SIM / XFRM 适配器 |
+| `/data/adb/sp970-wfc/bin/` | 自有运行程序、SIM / eUICC / XFRM 与 Android 适配器 |
 | `/data/adb/sp970-wfc/psm-direct-tun.json` | 私有节点配置，0600 |
 | `/data/adb/sp970-wfc/forward/` | 转发配置和持久任务队列，目录 0700 |
 | `/data/adb/sp970-wfc/sms/` | 私有 IMS 收件记录 |
 | `/data/adb/sp970-wfc/log/` | 当前和上一轮日志 |
 | `/data/adb/sp970-wfc/backups/` | 本机原生页面及安装文件备份 |
 | `/data/adb/service.d/90-sp970-wfc.sh` | Magisk 开机入口 |
-| `/system/var/www/wfc-panel.html` | 独立控制面板 |
+| `/system/var/www/index.html`、`login.html` | 统一控制台与登录 |
+| `/data/adb/sp970-wfc/ui-sessions.json` | 共享登录会话，0600 |
+| `/data/adb/sp970-wfc/sms-archived.json` | 可恢复短信归档元数据，0600 |
 
 升级重新运行新安装包的安装命令。会保留短信、会话令牌、转发配置和任务队列，运行文件替换前停止自有服务。每次安装有独立备份，首次安装备份用于卸载。
 

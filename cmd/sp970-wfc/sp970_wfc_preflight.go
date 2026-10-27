@@ -412,6 +412,13 @@ func main() {
 	}
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
+	if *adminMode {
+		if err := serveAdmin(ctx); err != nil && ctx.Err() == nil {
+			event("admin_error", map[string]any{"message": err.Error()})
+			os.Exit(1)
+		}
+		return
+	}
 	if err := run(ctx); err != nil && ctx.Err() == nil {
 		event("error", map[string]any{"message": err.Error()})
 		os.Exit(1)

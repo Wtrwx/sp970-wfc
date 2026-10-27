@@ -19,14 +19,15 @@ sh -n service/service-control.sh service/90-sp970-wfc.sh
 
 ## 构建安装包
 
-- Android NDK r27c，版本 `27.2.12479018`。
+- Android SDK platform 34、build-tools 34.0.0、Java 17+，以及 NDK r27c，版本 `27.2.12479018`。
 - WFC：Go 1.26.7。
 - 固定 Hysteria 代码：Go **1.25.6**，避免不同 Go 版本对 QUIC 实现的影响。
 
 ```sh
 python3 tools/build.py --go /path/to/go1.26.7 \
   --hysteria-go /path/to/go1.25.6 \
-  --ndk /path/to/android-ndk-r27c --version v0.2.0 --test
+  --ndk /path/to/android-ndk-r27c --android-sdk /path/to/android-sdk \
+  --version v0.3.0 --test
 ```
 
 产物在 `dist/`，包含 SHA256SUMS、独立二进制、安装工具、WebUI、许可证和对应源代码。NDK 以 API 21 头文件编译，使用 KitKat 已验证的 ARM32 vendor ABI、SysV ELF hash 和无分离 rosegment 链接参数；不能由 API 号推断已支持所有 Android 版本。
@@ -35,11 +36,11 @@ python3 tools/build.py --go /path/to/go1.26.7 \
 
 | 路径 | 职责 |
 | --- | --- |
-| `cmd/sp970-wfc/` | 一轮 WFC / IMS 短信会话、私有 API 与转发队列 |
-| `native/` | 内置卡槽的只读 QMI UIM / AKA 适配、精确 XFRM 操作 |
+| `cmd/sp970-wfc/` | 独立管理 API、WFC / IMS 短信会话与转发队列 |
+| `native/` | 内置卡槽 QMI UIM / AKA / eUICC 适配、XFRM 与 Android 连接服务 |
 | `service/` | 单实例、开机等待、进程恢复、受限路由清理 |
 | `tools/` | 本机配置、安装事务、备份回滚与构建 |
-| `web/` | 自有面板及原生后台的小型注入脚本 |
+| `web/` | 自有登录、统一控制台、cURL 转发编辑器与旧地址跳转 |
 | `third_party/` | 固定的公开 AGPL WFC 快照与 Hysteria 对应源码 |
 | `extras/sms-gateway/` | 可选的 HTTPS → 持久队列 → ntfy 接收服务 |
 

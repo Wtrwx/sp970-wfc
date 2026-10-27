@@ -27,6 +27,13 @@ This project includes the following separately attributed components:
    https://www.mozilla.org/MPL/2.0/
    Certificate information and source: https://curl.se/docs/caextract.html
 
+4. damonto/euicc-go, MIT, pinned to commit
+   8d873a2dfc98f84cc858783e8ca0e4ca04a869bc.
+   https://github.com/damonto/euicc-go
+   Its upstream license and dependency notices are included in release packages.
+   The project supplies only the transport adapter for the existing vendor QMI
+   library. No vendor library or card-specific keys are distributed.
+
 No proprietary firmware APK, vendor libqmi.so binary, device SMS, SIM secrets,
 private proxy account, signing key, or hosted forwarding credential is included.
 The device's existing vendor library and account database are read at runtime.

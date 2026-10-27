@@ -23,6 +23,18 @@ BOOT = "/data/adb/service.d/90-sp970-wfc.sh"
 NGINX = "/system/etc/nginx/conf/nginx.conf"
 WWW = "/system/var/www"
 MARKER = "# SP970-WFC managed API"
+CONSOLE_ASSETS = ("index.html", "login.html", "app.js", "app.css", "forward-editor.js", "wfc-panel.html", "wfc-settings.html")
+LEGACY_ROUTES = {"sms-device.html": "sms", "sms-sim.html": "sms", "sms-set.html": "sms", "sms-forward.html": "forward"}
+
+
+def console_redirect(view: str) -> str:
+    if view not in {"overview", "network", "sms", "forward", "euicc", "device"}:
+        raise ValueError("未知控制台页面")
+    target = "/index.html#" + view
+    return ('<!doctype html><html lang="zh-CN"><meta charset="utf-8">'
+            '<meta name="viewport" content="width=device-width,initial-scale=1">'
+            '<title>SP970 控制台</title><script>location.replace("' + target + '");</script>'
+            '<a href="' + target + '">打开控制台</a></html>\n')
 
 
 class Adb:
@@ -76,8 +88,15 @@ class Adb:
 
 
 def patch_nginx(text: str) -> str:
-    if MARKER in text:
-        return text
+    # Stock single-process mode ignores a HUP reconfigure. Enable the normal
+    # master so subsequent upgrades can reload without losing the listener.
+    text = re.sub(r"(?m)^\s*master_process\s+off\s*;", "master_process on;", text)
+    # Android's nobody UID cannot open loopback sockets without AID_INET.
+    # Keep workers unprivileged; grant only Android's standard network group.
+    if re.search(r"(?m)^\s*user\s+[^;]+;", text):
+        text = re.sub(r"(?m)^\s*user\s+[^;]+;", "user nobody inet;", text)
+    else:
+        text = "user nobody inet;\n" + text
     anchor = re.search(r"(?m)^\s*location\s+/\s*\{", text)
     if not anchor:
         raise ValueError("不支持该 Nginx 配置：找不到原生 location /，未改动文件")
@@ -96,43 +115,41 @@ def patch_nginx(text: str) -> str:
             access_log off;
         }
 """
-    if re.search(r"location\s+/wfc/\s*\{", text):
+    if MARKER in text:
+        api = ""
+    elif re.search(r"location\s+/wfc/\s*\{", text):
         # Upgrade the prototype without duplicating its API location.
         api = api[api.index("        location = /wfc-state"):]
         api = "        " + MARKER + "\n" + api
+    if not re.search(r"location\s+/wfc-admin/\s*\{", text):
+        api += """        # SP970-WFC management API
+        location /wfc-admin/ {
+            proxy_pass http://127.0.0.1:17893/;
+            proxy_set_header Host $http_host;
+            proxy_read_timeout 85s;
+            client_max_body_size 16k;
+            access_log off;
+        }
+"""
+    if not api:
+        return text
     return text[:anchor.start()] + "\n" + api + text[anchor.start():]
-
-
-def patch_native_html(text: str) -> str:
-    if 'src="/wfc-native-sms.js"' in text:
-        return text
-    match = re.search(r'(?i)(<script\b[^>]*\bsrc=["\'][^"\']*/?common\.js(?:\?[^"\']*)?["\'][^>]*>\s*</script>)', text)
-    if not match:
-        raise ValueError("不支持该原生页面：找不到 common.js，未改动文件")
-    return text[:match.end()] + '\n<script src="/wfc-native-sms.js"></script>' + text[match.end():]
-
-
-def patch_sms_navigation(text: str) -> str:
-    if re.search(r'href=["\']wfc-panel\.html#forward["\']', text):
-        return text
-    anchor = re.search(r'(?is)<li\b[^>]*>\s*<a\b[^>]*href=["\']sms-set\.html["\'][^>]*>.*?</a>\s*</li>', text)
-    if not anchor:
-        raise ValueError("不支持该短信页面：找不到设置菜单，未改动文件")
-    item = '\n<li><a href="wfc-panel.html#forward">短信转发</a></li>'
-    return text[:anchor.end()] + item + text[anchor.end():]
 
 
 def restore_added_native_pages(backup: str) -> str:
     # v0.1 backups did not manage these pages. Find their first snapshot after
     # the original installation, so an upgrade can still uninstall cleanly.
     return f'''BB=/system/xbin/busybox
-for N in sms-set.html sms-sim.html; do
+for P in {WWW}/*.html {WWW}/js/common.js {WWW}/app.js {WWW}/app.css {WWW}/forward-editor.js; do
+  N=$($BB basename "$P")
+  if [ "$N" = common.js ]; then N=native-common.js; fi
+  if [ -f {backup}/$N ] || [ -f {backup}/$N.absent ]; then continue; fi
   SEEN=0
   for D in {BASE}/backups/????????T??????Z; do
     if [ "$D" = {backup} ]; then SEEN=1; fi
     [ "$SEEN" = 1 ] || continue
-    if [ -f "$D/$N.absent" ]; then rm -f {WWW}/$N; break; fi
-    if [ -f "$D/$N" ]; then "$BB" cp -p "$D/$N" {WWW}/$N; break; fi
+    if [ -f "$D/$N.absent" ]; then rm -f "$P"; break; fi
+    if [ -f "$D/$N" ]; then "$BB" cp -p "$D/$N" "$P"; break; fi
   done
 done
 {reload_native_nginx()}'''
@@ -145,13 +162,29 @@ def reload_native_nginx() -> str:
 P=$(cat /sdcard/nginx/logs/nginx.pid 2>/dev/null)
 case "$P" in ''|*[!0-9]*|0|1) exit 0;; esac
 E=$(/system/xbin/busybox readlink /proc/$P/exe)
-if [ "$E" = /system/bin/nginx ]; then kill -HUP "$P"; fi
+if [ "$E" = /system/bin/nginx ]; then
+  C=$(/system/xbin/busybox tr '\\000' ' ' </proc/$P/cmdline)
+  # Restoring the stock single-process config requires a real restart too.
+  if /system/xbin/busybox grep -qE '^[[:space:]]*master_process[[:space:]]+off[[:space:]]*;' {NGINX}; then C=stock-single-process; fi
+  case "$C" in
+    *'nginx: master process'*) kill -HUP "$P";;
+    *)
+      kill -TERM "$P"
+      N=0
+      while [ -e /proc/$P ] && [ "$N" -lt 10 ]; do sleep 1; N=$((N + 1)); done
+      [ ! -e /proc/$P ] || exit 1
+      /system/xbin/busybox nohup /system/xbin/busybox setsid /system/bin/nginx \\
+        -p /sdcard/nginx -c {NGINX} >/data/local/tmp/sp970-nginx.log 2>&1 </dev/null &
+      sleep 1;;
+  esac
+fi
 )'''
 
 
 def rollback_script(files: dict[str, str], backup: str, *, old_control: bool, old_enabled: bool) -> str:
     lines = ["#!/system/bin/sh", "BB=/system/xbin/busybox",
-             f"/system/bin/sh {BASE}/service-control.sh disable 2>/dev/null", "sleep 18"]
+             f"/system/bin/sh {BASE}/service-control.sh disable 2>/dev/null",
+             f"/system/bin/sh {BASE}/service-control.sh stop-admin 2>/dev/null", "sleep 18"]
     for destination, name in files.items():
         lines += [f'if [ -f {backup}/{name}.absent ]; then rm -f {destination}; '
                   f'elif [ -f {backup}/{name} ]; then "$BB" cp -p {backup}/{name} {destination}; fi']
@@ -177,9 +210,9 @@ def verify_payload(payload: Path) -> None:
         if not file.is_file() or hashlib.sha256(file.read_bytes()).hexdigest() != digest:
             raise ValueError("安装包校验失败: " + name)
         seen.add(name)
-    required = {"bin/sp970-wfc", "bin/hysteria", "bin/sp970_uim_bridge", "bin/sp970_ims_xfrm",
-                "service/service-control.sh", "service/90-sp970-wfc.sh", "web/wfc-panel.html",
-                "web/wfc-panel.js", "web/native-sms.js", "web/forward-editor.js", "data/ca-roots.pem"}
+    required = {"bin/sp970-wfc", "bin/hysteria", "bin/sp970_uim_bridge", "bin/sp970_ims_xfrm", "bin/sp970_euicc_bridge", "bin/sp970_android.dex",
+                "service/service-control.sh", "service/90-sp970-wfc.sh", "data/ca-roots.pem"}
+    required.update("web/" + name for name in CONSOLE_ASSETS)
     if not required <= seen:
         raise ValueError("安装包缺少运行文件，请重新下载")
 
@@ -204,14 +237,14 @@ def install(adb: Adb, config: dict, payload: Path, *, start=True, wait_seconds=1
     print("[1/5] 检查设备、飞行模式和 Wi-Fi…")
     preflight(adb)
     original_nginx = adb.shell(f"cat {NGINX}") + "\n"
-    original_html = {name: adb.shell(f"cat {WWW}/{name}") + "\n" for name in ("login.html", "sms-device.html", "sms-set.html", "sms-sim.html")}
+    names = adb.shell(f"for P in {WWW}/*.html; do /system/xbin/busybox basename \"$P\"; done").splitlines()
+    original_names = {name.strip() for name in names}
+    if not {"index.html", "login.html"} <= original_names:
+        raise ValueError("设备缺少后台入口，未安装")
+    # Replace the primary entry points with our own frontend. Legacy SMS URLs
+    # redirect to the same app and session; no vendor shell or iframe is loaded.
     patched = {"nginx.conf": patch_nginx(original_nginx)}
-    for name, text in original_html.items():
-        if name in ("login.html", "sms-device.html"):
-            text = patch_native_html(text)
-        if name.startswith("sms-"):
-            text = patch_sms_navigation(text)
-        patched[name] = text
+    patched.update({name: console_redirect(view) for name, view in LEGACY_ROUTES.items()})
     stage = "/data/local/tmp/sp970-wfc-install-" + secrets.token_hex(6)
     backup = BASE + "/backups/" + datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
     old_control = adb.shell(f"if [ -f {BASE}/service-control.sh ]; then echo yes; fi") == "yes"
@@ -222,9 +255,9 @@ def install(adb: Adb, config: dict, payload: Path, *, start=True, wait_seconds=1
     try:
         with tempfile.TemporaryDirectory(prefix="sp970-wfc-install-") as temporary:
             tmp = Path(temporary)
-            for relative in ["bin/sp970-wfc", "bin/hysteria", "bin/sp970_uim_bridge", "bin/sp970_ims_xfrm",
-                             "service/service-control.sh", "service/90-sp970-wfc.sh", "web/wfc-panel.html",
-                             "web/wfc-panel.js", "web/native-sms.js", "web/forward-editor.js", "data/ca-roots.pem"]:
+            for relative in (["bin/sp970-wfc", "bin/hysteria", "bin/sp970_uim_bridge", "bin/sp970_ims_xfrm", "bin/sp970_euicc_bridge", "bin/sp970_android.dex",
+                              "service/service-control.sh", "service/90-sp970-wfc.sh", "data/ca-roots.pem"]
+                             + ["web/" + name for name in CONSOLE_ASSETS]):
                 adb.push(payload / relative, stage + "/" + Path(relative).name)
             local = {
                 **patched, "network-mode": config["mode"] + "\n",
@@ -247,17 +280,16 @@ def install(adb: Adb, config: dict, payload: Path, *, start=True, wait_seconds=1
         files = {
             f"{BASE}/bin/sp970-wfc": "sp970-wfc", f"{BASE}/bin/hysteria": "hysteria",
             f"{BASE}/bin/sp970_uim_bridge": "sp970_uim_bridge", f"{BASE}/bin/sp970_ims_xfrm": "sp970_ims_xfrm",
+            f"{BASE}/bin/sp970_euicc_bridge": "sp970_euicc_bridge", f"{BASE}/bin/sp970_android.dex": "sp970_android.dex",
             f"{BASE}/service-control.sh": "service-control.sh", BOOT: "90-sp970-wfc.sh",
             f"{BASE}/ca-roots.pem": "ca-roots.pem", NGINX: "nginx.conf",
-            **{f"{WWW}/{name}": name for name in original_html},
-            f"{WWW}/wfc-panel.html": "wfc-panel.html", f"{WWW}/wfc-panel.js": "wfc-panel.js",
-            f"{WWW}/forward-editor.js": "forward-editor.js",
-            f"{WWW}/wfc-native-sms.js": "native-sms.js", f"{BASE}/network-mode": "network-mode",
+            **{f"{WWW}/{name}": name for name in (*CONSOLE_ASSETS, *LEGACY_ROUTES)},
+            f"{BASE}/network-mode": "network-mode",
             f"{BASE}/proxy-ipv4": "proxy-ipv4", f"{BASE}/epdg-ipv4": "epdg-ipv4",
             f"{BASE}/psm-direct-tun.json": "psm-direct-tun.json",
         }
         if old_control:
-            adb.shell(f"/system/bin/sh {BASE}/service-control.sh disable; sleep 18", timeout=35)
+            adb.shell(f"/system/bin/sh {BASE}/service-control.sh disable; /system/bin/sh {BASE}/service-control.sh stop-admin; sleep 18", timeout=40)
         commands = ["set -e", "BB=/system/xbin/busybox",
                     f"mkdir -p {BASE}/bin {BASE}/run {BASE}/log {backup} /data/adb/service.d",
                     f"chmod 700 {BASE} {BASE}/bin {BASE}/run {BASE}/log {backup}",
@@ -284,6 +316,7 @@ def install(adb: Adb, config: dict, payload: Path, *, start=True, wait_seconds=1
             if '"imsi_prefix":"23487"' not in sim:
                 raise ValueError("SIM 策略不是受支持的 23487，已尝试恢复安装前配置；没有修改 SIM")
             adb.shell(reload_native_nginx())
+            adb.shell(f"/system/bin/sh {BASE}/service-control.sh admin", timeout=20)
         except Exception:
             try:
                 adb.shell(f"/system/bin/sh {restore_script}", timeout=90)
@@ -300,7 +333,7 @@ def install(adb: Adb, config: dict, payload: Path, *, start=True, wait_seconds=1
         while time.monotonic() < until:
             log = adb.shell(f"/system/xbin/busybox tail -n 25 {BASE}/log/wfc.log 2>/dev/null; true")
             if '"wfc_registered":true' in log:
-                print("WFC 注册成功。打开 http://<棒子IP>/wfc-panel.html，使用原生后台账号登录。")
+                print("WFC 注册成功。打开 http://<棒子IP>/index.html，使用原生后台账号登录。")
                 return
             time.sleep(5)
         raise ValueError("安装已完成，但 WFC 尚未注册。运行 python3 setup.py logs 查看阶段；无需重新安装")
