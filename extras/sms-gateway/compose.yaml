@@ -1,0 +1,11 @@
+services:
+  gateway:
+    build: .
+    restart: unless-stopped
+    env_file: .env
+    ports:
+      - "127.0.0.1:2587:2587"
+    volumes:
+      - sms-data:/data
+volumes:
+  sms-data:

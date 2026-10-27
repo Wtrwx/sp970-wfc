@@ -1,0 +1,18 @@
+{
+  "mode": "hysteria2",
+  "epdg_ipv4": "84.246.115.151",
+  "proxy_ipv4": "192.0.2.10",
+  "hysteria": {
+    "server": "192.0.2.10:443",
+    "auth": "CHANGE_ME",
+    "tls": {"sni": "uk.example.com", "insecure": false},
+    "fastOpen": false,
+    "socks5": {"listen": "127.0.0.1:17890"},
+    "http": {"listen": "127.0.0.1:17891"},
+    "tun": {
+      "name": "hypsm0",
+      "mtu": 1500,
+      "address": {"ipv4": "100.100.100.101/30", "ipv6": "fd44:5350:970::1/126"}
+    }
+  }
+}

@@ -1,0 +1,16 @@
+.DS_Store
+.local/
+.env
+.env.*
+!.env.example
+dist/
+__pycache__/
+*.pyc
+*.log
+*.apk
+*.ipcc
+*.key
+*.pk8
+*.keystore
+*.jks
+!third_party/**

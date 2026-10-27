@@ -1,0 +1,32 @@
+SP970 WFC Toolkit
+Copyright (c) 2026 SP970 WFC contributors
+Project code is licensed under AGPL-3.0-or-later unless otherwise indicated.
+
+This project includes the following separately attributed components:
+
+1. vowifi-go v1.1.2 snapshot, AGPL-3.0.
+   Included unchanged from yibaiba/hideck commit
+   c1d7d98c355e2385074318c68f9135d56c7915e9,
+   third_party/vowifi-go.v112.
+   https://github.com/yibaiba/hideck/tree/c1d7d98c355e2385074318c68f9135d56c7915e9/third_party/vowifi-go.v112
+   Its original LICENSE, notices and documentation are retained.
+   This is the historical AGPL snapshot, not a license claim about later
+   upstream VoCat/VoHive releases.
+
+2. Hysteria app/v2.6.5, commit
+   55e70a5f446fb4002f721de0b32bae6d6b03f164.
+   Upstream: https://github.com/apernet/hysteria
+   Included app/core/extras sources retain their original MIT licenses.
+   One documented change sets the Android ARM32 TUN route table to 20220.
+   Its Go dependencies retain their own licenses, including copyleft licenses.
+   See third_party/hysteria and THIRD_PARTY_LICENSES in release packages.
+
+3. Mozilla CA certificate bundle, obtained from
+   https://curl.se/ca/cacert.pem (2026-10-27).
+   The source certificate data is governed by the Mozilla Public License 2.0.
+   https://www.mozilla.org/MPL/2.0/
+   Certificate information and source: https://curl.se/docs/caextract.html
+
+No proprietary firmware APK, vendor libqmi.so binary, device SMS, SIM secrets,
+private proxy account, signing key, or hosted forwarding credential is included.
+The device's existing vendor library and account database are read at runtime.

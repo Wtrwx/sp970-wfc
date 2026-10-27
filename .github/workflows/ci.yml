@@ -1,0 +1,55 @@
+name: Test and release
+
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version: 1.26.7
+      - run: go test -race -count=1 ./cmd/sp970-wfc
+      - run: go vet ./cmd/sp970-wfc
+      - run: python3 -m unittest discover -s tests -v
+      - run: python3 -m unittest discover -s extras/sms-gateway -v
+      - run: sh -n service/service-control.sh service/90-sp970-wfc.sh
+      - run: node --check web/wfc-panel.js && node --check web/native-sms.js && node --check web/forward-editor.js
+
+  release:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: test
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version: 1.25.6
+          cache: false
+      - name: Remember proxy toolchain
+        run: echo "PROXY_GO=$(command -v go)" >> "$GITHUB_ENV"
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version: 1.26.7
+      - name: Install fixed Android NDK
+        run: |
+          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "ndk;27.2.12479018"
+          echo "ANDROID_NDK_HOME=$ANDROID_HOME/ndk/27.2.12479018" >> "$GITHUB_ENV"
+      - name: Build release from the pinned sources
+        run: python3 tools/build.py --go "$(command -v go)" --hysteria-go "$PROXY_GO" --ndk "$ANDROID_NDK_HOME" --version "$GITHUB_REF_NAME"
+      - name: Publish binaries, source and checksums
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1 || gh release create "$GITHUB_REF_NAME" --title "$GITHUB_REF_NAME" --notes-file docs/RELEASE.md
+          gh release upload "$GITHUB_REF_NAME" dist/*android-armv7.zip dist/SHA256SUMS --clobber

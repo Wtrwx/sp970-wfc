@@ -1,0 +1,10 @@
+--- a/app/internal/tun/server.go
++++ b/app/internal/tun/server.go
+@@ -55,6 +55,7 @@
+ 	}
+ 	tunOpts := tun.Options{
+ 		Name:                     s.IfName,
++		TableIndex:               20220, // Positive, reserved ID on 32-bit Android.
+ 		Inet4Address:             s.Inet4Address,
+ 		Inet6Address:             s.Inet6Address,
+ 		MTU:                      s.MTU,

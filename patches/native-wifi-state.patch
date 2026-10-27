@@ -1,0 +1,61 @@
+--- com/pingbao/MainActivity.smali
++++ com/pingbao/MainActivity.smali
+@@ -232,7 +232,9 @@
+ 
+     .line 453
+     :goto_1
+-    const/4 v3, 0x1
++    invoke-static {}, Lwebsocket_server/RootCmd;->getWifiState()Z
++
++    move-result v3
+ 
+     .line 454
+     .local v3, "wifiState":Z
+@@ -281,6 +283,8 @@
+     .line 460
+     .restart local v3    # "wifiState":Z
+     :cond_2
++    invoke-virtual {v4, v6}, Landroid/net/wifi/WifiManager;->setWifiEnabled(Z)Z
++
+     const-string v5, "pingbao MainActivity"
+ 
+     const-string v6, "onCreate: wifState is false"
+--- com/pingbao/ZyScreenService.smali
++++ com/pingbao/ZyScreenService.smali
+@@ -4,6 +4,19 @@
+     .param p1, "wM"    # Landroid/net/wifi/WifiManager;
+ 
+     .prologue
++    if-eqz p0, :sp970_native_wifi_state_ok
++
++    invoke-static {}, Lwebsocket_server/RootCmd;->getWifiState()Z
++
++    move-result v0
++
++    if-nez v0, :sp970_native_wifi_state_ok
++
++    const/4 v0, 0x0
++
++    return v0
++
++    :sp970_native_wifi_state_ok
+     const/4 v4, 0x0
+ 
+     .line 919
+--- websocket_server/ActionsByReceiving.smali
++++ websocket_server/ActionsByReceiving.smali
+@@ -82,6 +82,14 @@
+     :goto_1
+     invoke-static {v5}, Lwebsocket_server/RootCmd;->setWifiState(I)Z
+ 
++    if-nez v1, :sp970_native_wifi_toggle_done
++
++    const/4 v5, 0x1
++
++    invoke-virtual {v4, v5}, Landroid/net/wifi/WifiManager;->setWifiEnabled(Z)Z
++
++    :sp970_native_wifi_toggle_done
++
+     .line 643
+     return-object v0
+ 
