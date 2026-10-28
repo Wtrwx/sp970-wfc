@@ -19,10 +19,11 @@ import urllib.error
 import urllib.parse
 import urllib.request
 from dataclasses import dataclass
+from contextlib import contextmanager
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
-from typing import Any
+from typing import Any, Iterator
 
 
 LOG = logging.getLogger("sms-fcm-gateway")
@@ -94,6 +95,7 @@ class SmsEvent:
     sms_time: str
     body: str
     attempts: int
+    device_name: str = ""
 
 
 def decode_ufi_json_fragment(value: str) -> str:
@@ -143,11 +145,16 @@ class QueueStore:
         self.database_path.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
         self._initialize()
 
-    def _connect(self) -> sqlite3.Connection:
+    @contextmanager
+    def _connect(self) -> Iterator[sqlite3.Connection]:
         connection = sqlite3.connect(self.database_path, timeout=5)
         connection.row_factory = sqlite3.Row
         connection.execute("PRAGMA busy_timeout = 5000")
-        return connection
+        try:
+            with connection:
+                yield connection
+        finally:
+            connection.close()
 
     def _initialize(self) -> None:
         with self._connect() as connection:
@@ -161,6 +168,7 @@ class QueueStore:
                     sender TEXT NOT NULL,
                     sms_time TEXT NOT NULL,
                     body TEXT NOT NULL,
+                    device_name TEXT NOT NULL DEFAULT '',
                     status TEXT NOT NULL DEFAULT 'pending',
                     attempts INTEGER NOT NULL DEFAULT 0,
                     next_attempt_at INTEGER NOT NULL,
@@ -173,29 +181,34 @@ class QueueStore:
                     ON deliveries(status, next_attempt_at, id);
                 """
             )
+            columns = {row["name"] for row in connection.execute("PRAGMA table_info(deliveries)")}
+            if "device_name" not in columns:
+                connection.execute("ALTER TABLE deliveries ADD COLUMN device_name TEXT NOT NULL DEFAULT ''")
             connection.execute(
                 "UPDATE deliveries SET status = 'retry' WHERE status = 'sending'"
             )
 
     @staticmethod
-    def _dedupe_key(sender: str, sms_time: str, body: str) -> str:
+    def _dedupe_key(sender: str, sms_time: str, body: str, device_name: str = "") -> str:
         digest = hashlib.sha256()
         for value in (sender, sms_time, body):
             digest.update(value.encode("utf-8"))
             digest.update(b"\x00")
+        if device_name:
+            digest.update(b"device\x00" + device_name.encode("utf-8") + b"\x00")
         return digest.hexdigest()
 
-    def enqueue(self, sender: str, sms_time: str, body: str) -> tuple[int, bool]:
+    def enqueue(self, sender: str, sms_time: str, body: str, device_name: str = "") -> tuple[int, bool]:
         now = int(time.time())
-        dedupe_key = self._dedupe_key(sender, sms_time, body)
+        dedupe_key = self._dedupe_key(sender, sms_time, body, device_name)
         with self._connect() as connection:
             cursor = connection.execute(
                 """
                 INSERT OR IGNORE INTO deliveries
-                    (dedupe_key, sender, sms_time, body, next_attempt_at, created_at)
-                VALUES (?, ?, ?, ?, ?, ?)
+                    (dedupe_key, sender, sms_time, body, device_name, next_attempt_at, created_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
                 """,
-                (dedupe_key, sender, sms_time, body, now, now),
+                (dedupe_key, sender, sms_time, body, device_name, now, now),
             )
             created = cursor.rowcount == 1
             row = connection.execute(
@@ -211,7 +224,7 @@ class QueueStore:
             connection.execute("BEGIN IMMEDIATE")
             row = connection.execute(
                 """
-                SELECT id, sender, sms_time, body, attempts
+                SELECT id, sender, sms_time, body, attempts, device_name
                 FROM deliveries
                 WHERE status IN ('pending', 'retry') AND next_attempt_at <= ?
                 ORDER BY id
@@ -236,6 +249,7 @@ class QueueStore:
             sms_time=str(row["sms_time"]),
             body=str(row["body"]),
             attempts=int(row["attempts"]),
+            device_name=str(row["device_name"]),
         )
 
     def mark_sent(self, event_id: int, ntfy_message_id: str | None) -> None:
@@ -300,9 +314,10 @@ class NtfyPublisher:
     def publish(self, event: SmsEvent) -> str | None:
         sender = one_line(event.sender, "未知号码")
         sms_time = one_line(event.sms_time, "未知时间")
+        device_name = one_line(event.device_name, self.config.device_name)
         title = truncate_utf8(f"短信 · {sender}", 180)
         message = truncate_utf8(
-            f"{event.body}\n\n来自：{sender}\n时间：{sms_time}\n设备：{self.config.device_name}",
+            f"{event.body}\n\n来自：{sender}\n时间：{sms_time}\n设备：{device_name}",
             3500,
         )
         payload: dict[str, Any] = {
@@ -463,6 +478,10 @@ class GatewayHandler(BaseHTTPRequestHandler):
             sender = str(fields.get("from", "")).strip()
             sms_time = str(fields.get("time", "")).strip()
             body = str(fields.get("body", ""))
+            device_name = fields.get("device", "")
+            if not isinstance(device_name, str):
+                raise ValueError("device must be a string")
+            device_name = one_line(device_name, "")
             if str(fields.get("ufi_escaped", "")).lower() in {"1", "true", "yes"}:
                 body = decode_ufi_json_fragment(body)
         except (UnicodeDecodeError, json.JSONDecodeError, ValueError) as exc:
@@ -472,11 +491,11 @@ class GatewayHandler(BaseHTTPRequestHandler):
         if not body.strip():
             self._respond_json(HTTPStatus.BAD_REQUEST, {"error": "body_required"})
             return
-        if len(sender) > 256 or len(sms_time) > 128 or len(body.encode("utf-8")) > 16384:
+        if len(sender) > 256 or len(sms_time) > 128 or len(body.encode("utf-8")) > 16384 or len(device_name.encode("utf-8")) > 128:
             self._respond_json(HTTPStatus.REQUEST_ENTITY_TOO_LARGE, {"error": "field_too_large"})
             return
 
-        event_id, created = self.server.store.enqueue(sender, sms_time, body)
+        event_id, created = self.server.store.enqueue(sender, sms_time, body, device_name)
         self._respond_json(
             HTTPStatus.ACCEPTED if created else HTTPStatus.OK,
             {"accepted": True, "duplicate": not created, "id": event_id},
@@ -498,6 +517,7 @@ class GatewayHandler(BaseHTTPRequestHandler):
                 "from": self.headers.get("X-SMS-From", ""),
                 "time": self.headers.get("X-SMS-Time", ""),
                 "ufi_escaped": self.headers.get("X-UFI-Escaped", ""),
+                "device": self.headers.get("X-SMS-Device", ""),
             }
         raise ValueError("unsupported content type")
 

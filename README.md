@@ -72,6 +72,7 @@ http://<棒子的Wi-Fi地址>/index.html
 ```sh
 curl -X POST 'https://sms.example.com/v1/sms' \
   -H 'Authorization: Bearer YOUR_TOKEN' \
+  --data-urlencode 'device=SP970-B' \
   --data-urlencode 'from={{sms-from}}' \
   --data-urlencode 'body={{sms-body}}'
 ```
@@ -84,6 +85,7 @@ Authorization 在命令和预览中显示完整值，方便编辑和复制。其
 
 | 字段 | 内容 |
 | --- | --- |
+| `device` | 可选设备名称；多台设备共用网关时分别填写 |
 | `from` | 发件号码 |
 | `time` | UTC / RFC3339 时间 |
 | `body` | JSON 转义后的短信正文，再进行表单编码 |
