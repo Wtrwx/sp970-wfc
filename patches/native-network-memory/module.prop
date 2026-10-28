@@ -1,0 +1,6 @@
+id=sp970-network-memory
+name=SP970 Network State Memory
+version=1.0
+versionCode=1
+author=Local device owner
+description=Remember Wi-Fi, hotspot and USB tether switches. Tailscale starts separately.

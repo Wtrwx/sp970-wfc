@@ -1,21 +1,669 @@
 <!doctype html>
-<html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="color-scheme" content="light"><title>SP970 控制台</title><link rel="stylesheet" href="/app.css?v=0.3.0"></head>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="color-scheme" content="light">
+  <title>设备设置</title>
+  <link rel="icon" href="data:,">
+  <link rel="stylesheet" href="/app.css?v=0.6.0-desktop1">
+</head>
 <body data-page="app">
-<div id="app-loading" class="app-loading"><span class="brand-mark">S</span><p>正在连接设备…</p></div>
-<div id="app" hidden>
-<aside class="sidebar"><a class="brand" href="#overview"><span class="brand-mark">S</span><span>SP970<span class="brand-sub">设备控制台</span></span></a><nav aria-label="主导航"><a href="#overview" data-page="overview"><span class="nav-icon">◫</span>设备概览</a><a href="#network" data-page="network"><span class="nav-icon">⌁</span>网络与 WFC</a><a href="#sms" data-page="sms"><span class="nav-icon">▤</span>短信<span id="sms-badge" class="count" hidden></span></a><a href="#forward" data-page="forward"><span class="nav-icon">↗</span>短信转发</a><a href="#euicc" data-page="euicc"><span class="nav-icon">▣</span>eSIM 管理</a><a href="#device" data-page="device"><span class="nav-icon">⚙</span>设备信息</a></nav><div class="sidebar-bottom"><span class="live-dot"></span><span id="sidebar-device">SP970-B</span><small>Wi-Fi Calling 控制台</small></div></aside>
-<div class="app-main"><header class="topbar"><span id="breadcrumb">设备概览</span><div class="topbar-right"><span id="header-state" class="pill">连接中</span><button class="text-button" id="logout">退出登录</button></div></header>
-<main class="content"><div class="page-heading"><div><p class="eyebrow">SP970 CONSOLE</p><h1 id="page-title">设备概览</h1><p id="page-description" class="muted">设备连接与服务状态</p></div><button id="refresh" class="button secondary small">刷新</button></div><p id="notice" class="notice" role="status" aria-live="polite"></p>
-<div data-view="overview">
-<div class="metrics"><article class="metric"><span class="metric-label">Wi-Fi Calling</span><strong id="metric-wfc">—</strong><small id="metric-wfc-sub">读取状态</small></article><article class="metric"><span class="metric-label">Wi-Fi 连接</span><strong id="metric-wifi">—</strong><small id="metric-ip">—</small></article><article class="metric"><span class="metric-label">飞行模式</span><strong id="metric-flight">—</strong><small>Wi-Fi 保持连接</small></article><article class="metric"><span class="metric-label">SIM 策略</span><strong id="metric-sim">—</strong><small id="metric-sim-sub">读取 SIM</small></article></div>
-<div class="columns"><section class="card"><div class="card-heading"><h2>连接控制</h2><span class="muted text-small">实时状态</span></div><div class="setting-row"><div><h3>Wi-Fi Calling</h3><p>开启后自动注册，开机自动恢复</p></div><label class="switch"><input type="checkbox" data-switch="wfc" aria-label="Wi-Fi Calling 开关"><span></span></label></div><div class="setting-row"><div><h3>飞行模式</h3><p>通过 Wi-Fi 使用 WFC 时保持开启</p></div><label class="switch"><input type="checkbox" data-switch="flight" aria-label="飞行模式开关"><span></span></label></div><a class="card-link" href="#network">管理网络与代理 <span>→</span></a></section><section class="card"><div class="card-heading"><h2>当前网络</h2><span id="overview-proxy-badge" class="pill">—</span></div><dl class="info-list"><div><dt>上游 Wi-Fi</dt><dd id="overview-ssid">—</dd></div><div><dt>代理出口</dt><dd id="overview-proxy">—</dd></div><div><dt>SIM</dt><dd id="overview-sim">—</dd></div><div><dt>WFC 注册</dt><dd id="overview-registration">—</dd></div></dl></section></div>
-<section class="card quick-card"><div><h2>短信与 eSIM</h2><p class="muted">收发短信、转发通知，或管理小白卡配置</p></div><div class="quick-actions"><a class="button secondary" href="#sms">查看短信</a><a class="button secondary" href="#euicc">管理 eSIM</a></div></section></div>
-<div data-view="network" hidden>
-<div class="columns"><section class="card"><div class="card-heading"><h2>Wi-Fi Calling</h2><label class="switch"><input type="checkbox" data-switch="wfc" aria-label="网络页 Wi-Fi Calling 开关"><span></span></label></div><p id="network-wfc-state" class="muted">读取状态</p><div class="divider"></div><div class="setting-row compact"><div><h3>飞行模式</h3><p id="network-flight-state">读取状态</p></div><label class="switch"><input type="checkbox" data-switch="flight" aria-label="网络页飞行模式开关"><span></span></label></div></section><section class="card"><div class="card-heading"><h2>代理出口</h2><span id="proxy-badge" class="pill">—</span></div><p id="proxy-server" class="muted">读取配置</p><form id="proxy-form"><label>连接方式<select id="network-mode"><option value="hysteria2">Hysteria2 代理</option><option value="direct">直连 / 上游已代理</option></select></label><label id="node-field">节点链接<input id="proxy-uri" type="password" autocomplete="off" placeholder="留空保留当前节点"></label><details><summary>ePDG 地址</summary><label>Lebara UK<select id="epdg"><option>84.246.115.151</option><option>84.246.113.151</option></select></label></details><button class="button" type="submit">保存并应用</button></form></section></div>
-<section class="card"><div class="card-heading"><div><h2>Wi-Fi 连接</h2><p id="wifi-connection" class="muted">读取状态</p></div><button class="button secondary small" id="wifi-scan">扫描网络</button></div><div id="wifi-networks" class="network-list"></div><details><summary>已保存的网络</summary><div id="wifi-saved" class="network-list"></div></details><details id="wifi-connect"><summary>连接其他网络</summary><form id="wifi-form" class="form-grid"><label>Wi-Fi 名称<input id="wifi-ssid" autocomplete="off" maxlength="32" required></label><label>安全类型<select id="wifi-security"><option value="wpa2">WPA / WPA2 个人</option><option value="open">开放网络</option></select></label><label id="wifi-password-label">密码<input id="wifi-password" type="password" autocomplete="new-password"></label><div class="form-action"><button class="button">保存并连接</button></div></form></details></section></div>
-<div data-view="sms" hidden><section class="card"><div class="card-heading"><div class="segmented"><button data-sms-box="inbox" class="active">收件箱</button><button data-sms-box="sent">已发送</button><button data-sms-box="archive">已归档</button></div><button class="button small" id="compose-open">写短信</button></div><p class="muted text-small" id="sms-summary">读取短信…</p><div id="sms-list" class="sms-list"></div></section><section class="card" id="compose" hidden><div class="card-heading"><h2>发送短信</h2><button class="text-button" id="compose-close">收起</button></div><form id="send-form"><label>收件号码<input id="recipient" type="tel" autocomplete="off" placeholder="+44…" required></label><label>短信内容<textarea id="message" maxlength="1000" rows="5" required></textarea></label><button class="button">发送短信</button></form></section></div>
-<div data-view="forward" hidden><section class="card"><div class="card-heading"><h2>短信转发</h2></div><div id="forward-editor"></div></section></div>
-<div data-view="euicc" hidden><section class="card"><div class="card-heading"><div><h2>小白卡配置</h2><p class="muted">切换后重新检查 SIM 策略</p></div><button class="button secondary small" id="euicc-refresh">刷新配置</button></div><p class="muted" id="euicc-summary">正在读取…</p><div id="euicc-profiles" class="profile-list"></div></section></div>
-<div data-view="device" hidden><section class="card"><div class="card-heading"><h2>设备与系统</h2><span class="pill good">管理服务在线</span></div><dl class="info-list wide"><div><dt>设备型号</dt><dd id="device-model">—</dd></div><div><dt>系统版本</dt><dd id="device-android">—</dd></div><div><dt>固件</dt><dd id="device-firmware">—</dd></div><div><dt>运行时间</dt><dd id="device-uptime">—</dd></div><div><dt>设备时间</dt><dd id="device-time">—</dd></div><div><dt>Wi-Fi 地址</dt><dd id="device-ip">—</dd></div><div><dt>WFC 开机自启</dt><dd id="device-autostart">—</dd></div></dl></section><p class="text-small muted">SP970 WFC Toolkit · <a href="https://github.com/Wtrwx/sp970-wfc" target="_blank" rel="noopener">项目源码</a></p></div>
-</main><footer class="app-footer"><span>SP970 控制台</span><span id="footer-state">正在连接</span></footer></div></div>
-<script src="/forward-editor.js"></script><script src="/app.js?v=0.3.0"></script></body></html>
+  <div id="app-loading" class="app-loading">
+    <svg class="icon spin" viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M21 12a9 9 0 1 1-6.219-8.56"></path>
+    </svg>
+    <span id="app-loading-text" data-i18n="common.connecting">正在连接…</span>
+  </div>
+
+  <div id="app" hidden>
+    <div id="sidebar-backdrop" class="sidebar-backdrop" hidden></div>
+
+    <aside id="sidebar" class="sidebar">
+      <div class="sidebar-header">
+        <a class="brand" href="#connect">
+          <svg class="icon icon-lg" viewBox="0 0 24 24" aria-hidden="true">
+            <circle cx="12" cy="12" r="3"></circle>
+            <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9c.26.604.852.997 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
+          </svg>
+          <span data-i18n="nav.settingsBrand">设置</span>
+        </a>
+        <button id="drawer-close" class="drawer-close" type="button" data-i18n-aria="common.closeMenu">
+          <svg class="icon" viewBox="0 0 24 24" aria-hidden="true">
+            <line x1="18" y1="6" x2="6" y2="18"></line>
+            <line x1="6" y1="6" x2="18" y2="18"></line>
+          </svg>
+        </button>
+      </div>
+
+      <nav class="sidebar-nav" data-i18n-aria="nav.ariaLabel">
+        <div class="nav-section-label" data-i18n="nav.groupConn">连接</div>
+
+        <a class="nav-item active" href="#connect" data-page="connect">
+          <svg class="icon" viewBox="0 0 24 24" aria-hidden="true">
+            <line x1="4" y1="21" x2="4" y2="14"></line>
+            <line x1="4" y1="10" x2="4" y2="3"></line>
+            <line x1="12" y1="21" x2="12" y2="12"></line>
+            <line x1="12" y1="8" x2="12" y2="3"></line>
+            <line x1="20" y1="21" x2="20" y2="16"></line>
+            <line x1="20" y1="12" x2="20" y2="3"></line>
+            <line x1="1" y1="14" x2="7" y2="14"></line>
+            <line x1="9" y1="8" x2="15" y2="8"></line>
+            <line x1="17" y1="16" x2="23" y2="16"></line>
+          </svg>
+          <span data-i18n="nav.connect">连接与开关</span>
+        </a>
+
+        <a class="nav-item" href="#wifi" data-page="wifi">
+          <svg class="icon" viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M5 12.55a11 11 0 0 1 14.08 0"></path>
+            <path d="M1.42 9a16 16 0 0 1 21.16 0"></path>
+            <path d="M8.53 16.11a6 6 0 0 1 6.95 0"></path>
+            <circle cx="12" cy="20" r="1"></circle>
+          </svg>
+          <span data-i18n="nav.wifi">WLAN</span>
+        </a>
+
+        <a class="nav-item" href="#hotspot" data-page="hotspot">
+          <svg class="icon" viewBox="0 0 24 24" aria-hidden="true">
+            <circle cx="12" cy="12" r="2"></circle>
+            <path d="M16.24 7.76a6 6 0 0 1 0 8.49"></path>
+            <path d="M7.76 16.24a6 6 0 0 1 0-8.49"></path>
+            <path d="M19.07 4.93a10 10 0 0 1 0 14.14"></path>
+            <path d="M4.93 19.07a10 10 0 0 1 0-14.14"></path>
+          </svg>
+          <span data-i18n="nav.hotspot">个人热点</span>
+        </a>
+
+        <a class="nav-item" href="#cellular" data-page="cellular">
+          <svg class="icon" viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M6 2h8l4 4v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2z"></path>
+            <rect x="8" y="11" width="8" height="7" rx="1"></rect>
+            <path d="M12 11v7M8 14.5h8"></path>
+          </svg>
+          <span data-i18n="nav.cellular">移动网络与 eSIM</span>
+        </a>
+
+        <a class="nav-item" href="#vpn" data-page="vpn">
+          <svg class="icon" viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path>
+          </svg>
+          <span data-i18n="nav.vpn">VPN 与代理</span>
+        </a>
+
+        <div class="nav-section-label" data-i18n="nav.groupSystem">系统</div>
+
+        <a class="nav-item" href="#sms" data-page="sms">
+          <svg class="icon" viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
+          </svg>
+          <span data-i18n="nav.sms">信息</span>
+          <span id="sms-badge" class="nav-badge" hidden></span>
+        </a>
+
+        <a class="nav-item" href="#about" data-page="about">
+          <svg class="icon" viewBox="0 0 24 24" aria-hidden="true">
+            <circle cx="12" cy="12" r="10"></circle>
+            <line x1="12" y1="16" x2="12" y2="12"></line>
+            <line x1="12" y1="8" x2="12.01" y2="8"></line>
+          </svg>
+          <span data-i18n="nav.about">关于本机</span>
+        </a>
+      </nav>
+    </aside>
+
+    <div class="app-main">
+      <header class="topbar">
+        <div class="topbar-left">
+          <button id="menu-toggle" class="menu-btn" type="button" data-i18n-aria="common.openMenu">
+            <svg class="icon" viewBox="0 0 24 24" aria-hidden="true">
+              <line x1="3" y1="6" x2="21" y2="6"></line>
+              <line x1="3" y1="12" x2="21" y2="12"></line>
+              <line x1="3" y1="18" x2="21" y2="18"></line>
+            </svg>
+          </button>
+          <h1 id="page-title" class="topbar-title">连接与开关</h1>
+        </div>
+
+        <div class="topbar-right">
+          <button id="refresh" class="btn btn-sm" type="button" data-i18n-aria="common.refresh">
+            <svg id="refresh-icon" class="icon icon-sm" viewBox="0 0 24 24" aria-hidden="true">
+              <polyline points="23 4 23 10 17 10"></polyline>
+              <polyline points="1 20 1 14 7 14"></polyline>
+              <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path>
+            </svg>
+            <span class="refresh-label" data-i18n="common.refresh">刷新</span>
+          </button>
+
+          <div class="lang-switch" role="group" data-i18n-aria="common.langSwitch">
+            <button type="button" data-lang="zh" class="active">中文</button>
+            <button type="button" data-lang="en">EN</button>
+          </div>
+
+          <div class="account-menu">
+            <button id="account-btn" class="account-trigger" type="button" aria-haspopup="menu" aria-expanded="false">
+              <svg class="icon icon-sm" viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
+                <circle cx="12" cy="7" r="4"></circle>
+              </svg>
+              <span id="account-name">admin</span>
+              <svg class="icon icon-sm muted" viewBox="0 0 24 24" aria-hidden="true">
+                <polyline points="6 9 12 15 18 9"></polyline>
+              </svg>
+            </button>
+
+            <div id="account-dropdown" class="account-dropdown" role="menu" hidden>
+              <div class="account-meta">
+                <span class="account-meta-label" data-i18n="account.signedInAs">当前账号</span>
+                <span id="account-dropdown-user" class="account-meta-user">admin</span>
+              </div>
+              <button id="logout" class="account-item" type="button" role="menuitem">
+                <svg class="icon icon-sm" viewBox="0 0 24 24" aria-hidden="true">
+                  <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path>
+                  <polyline points="16 17 21 12 16 7"></polyline>
+                  <line x1="21" y1="12" x2="9" y2="12"></line>
+                </svg>
+                <span data-i18n="account.logout">退出登录</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      </header>
+
+      <main class="content">
+        <div id="notice" class="alert" role="status" aria-live="polite" hidden>
+          <div class="alert-body">
+            <span id="notice-text"></span>
+          </div>
+          <button id="notice-close" class="alert-close" type="button" data-i18n-aria="common.close">
+            <svg class="icon icon-sm" viewBox="0 0 24 24" aria-hidden="true">
+              <line x1="18" y1="6" x2="6" y2="18"></line>
+              <line x1="6" y1="6" x2="18" y2="18"></line>
+            </svg>
+          </button>
+        </div>
+
+        <!-- View 1: Connect & Switches (iOS / Android Settings Quick List) -->
+        <div data-view="connect">
+          <section class="settings-card">
+            <div id="connect-list" class="settings-list"></div>
+          </section>
+        </div>
+
+        <!-- View 2: WLAN -->
+        <div data-view="wifi" hidden>
+          <section class="settings-card">
+            <div class="settings-row">
+              <div class="settings-row-left">
+                <span class="row-title" data-i18n="switches.wifi">WLAN</span>
+              </div>
+              <div class="settings-row-right">
+                <button id="wifi-other-btn" class="btn btn-sm" type="button" data-i18n="wifi.otherBtn">其他网络…</button>
+                <button id="wifi-scan" class="btn btn-sm" type="button">
+                  <svg id="wifi-scan-icon" class="icon icon-sm" viewBox="0 0 24 24" aria-hidden="true">
+                    <polyline points="23 4 23 10 17 10"></polyline>
+                    <polyline points="1 20 1 14 7 14"></polyline>
+                    <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path>
+                  </svg>
+                  <span id="wifi-scan-label" data-i18n="wifi.scan">扫描</span>
+                </button>
+                <label class="switch">
+                  <input type="checkbox" data-switch="wifi" data-i18n-aria="switches.wifi">
+                  <span class="switch-track"></span>
+                </label>
+              </div>
+            </div>
+
+            <div id="wifi-other-drawer" class="inline-drawer" hidden>
+              <form id="wifi-form" novalidate>
+                <div class="drawer-grid">
+                  <div class="form-field">
+                    <label class="form-label" for="wifi-ssid" data-i18n="wifi.ssid">名称</label>
+                    <input id="wifi-ssid" class="input" type="text" autocomplete="off" maxlength="32" required>
+                  </div>
+                  <div class="form-field">
+                    <label class="form-label" for="wifi-security" data-i18n="wifi.security">安全性</label>
+                    <select id="wifi-security" class="input">
+                      <option value="wpa2" data-i18n="wifi.wpa2">WPA / WPA2</option>
+                      <option value="open" data-i18n="wifi.open">无</option>
+                    </select>
+                  </div>
+                  <div id="wifi-password-field" class="form-field">
+                    <label class="form-label" for="wifi-password" data-i18n="login.password">密码</label>
+                    <input id="wifi-password" class="input" type="text" autocomplete="off" maxlength="63">
+                  </div>
+                  <div class="drawer-actions">
+                    <button id="wifi-other-cancel" class="btn" type="button" data-i18n="common.cancel">取消</button>
+                    <button id="wifi-connect-btn" class="btn btn-primary" type="submit" data-i18n="wifi.join">加入</button>
+                  </div>
+                </div>
+              </form>
+            </div>
+          </section>
+
+          <div id="wifi-picker" class="wifi-sections"></div>
+        </div>
+
+        <!-- View 3: Personal Hotspot -->
+        <div data-view="hotspot" hidden>
+          <form id="hotspot-form" novalidate>
+            <section class="settings-card">
+              <div class="settings-row">
+                <div class="settings-row-left">
+                  <span class="row-title" data-i18n="switches.hotspot">个人热点</span>
+                </div>
+                <div class="settings-row-right">
+                  <span id="hotspot-live-meta" class="row-value tabular"></span>
+                  <label class="switch">
+                    <input type="checkbox" data-switch="hotspot" data-i18n-aria="switches.hotspot">
+                    <span class="switch-track"></span>
+                  </label>
+                </div>
+              </div>
+
+              <div class="settings-row">
+                <div class="settings-row-left">
+                  <span class="row-title" data-i18n="switches.hotspot_broadcast">热点广播</span>
+                </div>
+                <div class="settings-row-right">
+                  <label class="switch">
+                    <input type="checkbox" data-switch="hotspot_broadcast" data-i18n-aria="switches.hotspot_broadcast">
+                    <span class="switch-track"></span>
+                  </label>
+                </div>
+              </div>
+
+              <div class="settings-row form-row">
+                <label class="row-title" for="hotspot-ssid" data-i18n="hotspot.ssid">名称</label>
+                <input id="hotspot-ssid" class="input row-input" type="text" autocomplete="off" maxlength="32" required>
+              </div>
+
+              <div class="settings-row form-row">
+                <label class="row-title" for="hotspot-security" data-i18n="wifi.security">安全性</label>
+                <select id="hotspot-security" class="input row-input">
+                  <option value="wpa2" data-i18n="hotspot.wpa2">WPA2 个人</option>
+                  <option value="open" data-i18n="wifi.open">无</option>
+                </select>
+              </div>
+
+              <div id="hotspot-pwd-row" class="settings-row form-row">
+                <label class="row-title" for="hotspot-password" data-i18n="hotspot.password">热点密码</label>
+                <input id="hotspot-password" class="input row-input mono" type="text" autocomplete="off" maxlength="63">
+              </div>
+
+              <div class="settings-footer">
+                <button id="hotspot-cfg-save" class="btn btn-primary" type="submit" data-i18n="common.save">保存</button>
+              </div>
+            </section>
+          </form>
+        </div>
+
+        <!-- View 4: Mobile Network & eSIM -->
+        <div data-view="cellular" hidden>
+          <div class="section-header">
+            <span class="section-title" data-i18n="cellular.wfcSection">Wi-Fi 通话</span>
+          </div>
+          <section class="settings-card">
+            <div class="settings-row">
+              <div class="settings-row-left">
+                <span class="row-title" data-i18n="switches.wfc">Wi-Fi 通话</span>
+              </div>
+              <div class="settings-row-right">
+                <span class="status-inline">
+                  <i id="cell-wfc-dot" class="dot"></i>
+                  <span id="cell-wfc-state">—</span>
+                </span>
+                <label class="switch">
+                  <input type="checkbox" data-switch="wfc" data-i18n-aria="switches.wfc">
+                  <span class="switch-track"></span>
+                </label>
+              </div>
+            </div>
+
+            <div class="settings-row">
+              <div class="settings-row-left">
+                <span class="row-title" data-i18n="cellular.simPolicy">SIM 卡</span>
+              </div>
+              <div class="settings-row-right">
+                <span id="cell-sim-state" class="row-value tabular">—</span>
+              </div>
+            </div>
+
+            <div class="settings-row form-row">
+              <label class="row-title" for="cell-epdg" data-i18n="cellular.epdg">ePDG 服务器</label>
+              <select id="cell-epdg" class="input row-input mono">
+                <option value="84.246.115.151">84.246.115.151</option>
+                <option value="84.246.113.151">84.246.113.151</option>
+              </select>
+            </div>
+          </section>
+
+          <div class="section-header">
+            <div class="section-header-left">
+              <span class="section-title" data-i18n="euicc.sectionTitle">eSIM</span>
+              <span id="euicc-eid" class="section-meta mono"></span>
+            </div>
+            <div class="section-header-actions">
+              <button id="euicc-add-btn" class="btn btn-primary btn-sm" type="button">
+                <svg class="icon icon-sm" viewBox="0 0 24 24" aria-hidden="true">
+                  <line x1="12" y1="5" x2="12" y2="19"></line>
+                  <line x1="5" y1="12" x2="19" y2="12"></line>
+                </svg>
+                <span data-i18n="euicc.addBtn">添加 eSIM</span>
+              </button>
+              <button id="euicc-refresh" class="btn btn-sm" type="button" data-i18n="common.refresh">刷新</button>
+            </div>
+          </div>
+
+          <section class="settings-card">
+            <div id="euicc-add-drawer" class="inline-drawer first-drawer" hidden>
+              <form id="euicc-add-form" novalidate>
+                <div class="form-field">
+                  <label class="form-label" for="euicc-code" data-i18n="euicc.codeLabel">激活码</label>
+                  <input id="euicc-code" class="input mono" type="text" autocomplete="off" placeholder="LPA:1$smdp.address$matchingId" required>
+                </div>
+                <div class="form-grid-2" style="margin-top:12px">
+                  <div class="form-field">
+                    <label class="form-label" for="euicc-new-nickname" data-i18n="euicc.nicknameOptional">名称（可选）</label>
+                    <input id="euicc-new-nickname" class="input" type="text" autocomplete="off" maxlength="64">
+                  </div>
+                  <div class="form-field">
+                    <label class="form-label" for="euicc-confirm-code" data-i18n="euicc.confirmCodeOptional">确认码（可选）</label>
+                    <input id="euicc-confirm-code" class="input mono" type="text" autocomplete="off" maxlength="64">
+                  </div>
+                </div>
+                <div class="form-actions">
+                  <button id="euicc-add-submit" class="btn btn-primary" type="submit" data-i18n="euicc.downloadBtn">下载并安装</button>
+                  <button id="euicc-add-cancel" class="btn" type="button" data-i18n="common.cancel">取消</button>
+                </div>
+              </form>
+            </div>
+
+            <div id="euicc-progress" class="progress-bar" hidden>
+              <svg class="icon spin" viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M21 12a9 9 0 1 1-6.219-8.56"></path>
+              </svg>
+              <span id="euicc-progress-text"></span>
+            </div>
+
+            <div id="euicc-list" class="esim-list" hidden></div>
+            <div id="euicc-empty" class="empty-state" hidden></div>
+          </section>
+        </div>
+
+        <!-- View 5: VPN & Proxy (Tailscale + Multi-Protocol Proxy) -->
+        <div data-view="vpn" hidden>
+          <div class="section-header">
+            <span class="section-title">Tailscale</span>
+          </div>
+          <section class="settings-card">
+            <div class="settings-row">
+              <div class="settings-row-left">
+                <span class="row-title">Tailscale</span>
+              </div>
+              <div class="settings-row-right">
+                <span class="status-inline">
+                  <i id="ts-dot" class="dot"></i>
+                  <span id="ts-state-text">—</span>
+                </span>
+                <label class="switch">
+                  <input type="checkbox" data-switch="tailscale" aria-label="Tailscale">
+                  <span class="switch-track"></span>
+                </label>
+              </div>
+            </div>
+
+            <div class="settings-row">
+              <div class="settings-row-left">
+                <span class="row-title">Tailscale SSH</span>
+              </div>
+              <div class="settings-row-right">
+                <span class="row-value" data-connect-val="tailscale_ssh">—</span>
+                <label class="switch">
+                  <input type="checkbox" data-switch="tailscale_ssh" aria-label="Tailscale SSH" disabled>
+                  <span class="switch-track"></span>
+                </label>
+              </div>
+            </div>
+
+            <div id="ts-ip-row" class="settings-row" hidden>
+              <div class="settings-row-left">
+                <span class="row-title" data-i18n="vpn.tsAddress">节点地址</span>
+              </div>
+              <div class="settings-row-right">
+                <span id="ts-ip-val" class="row-value mono">—</span>
+              </div>
+            </div>
+
+            <div id="ts-account-row" class="settings-row" hidden>
+              <div class="settings-row-left">
+                <span class="row-title" data-i18n="vpn.tsNode">设备与网络</span>
+              </div>
+              <div class="settings-row-right">
+                <span id="ts-account-val" class="row-value">—</span>
+              </div>
+            </div>
+
+            <div id="ts-auth-url-row" class="ts-auth-banner" hidden>
+              <a id="ts-auth-link" class="ts-auth-link mono" href="#" target="_blank" rel="noopener noreferrer"></a>
+              <a id="ts-auth-open-btn" class="btn btn-primary btn-sm" href="#" target="_blank" rel="noopener noreferrer" data-i18n="vpn.openLoginUrl">打开登录页</a>
+            </div>
+
+            <div id="ts-actions-row" class="settings-footer ts-footer">
+              <button id="ts-login-btn" class="btn btn-primary" type="button" data-i18n="vpn.tsLogin">登录</button>
+              <button id="ts-key-toggle" class="btn" type="button" data-i18n="vpn.tsUseKey">使用 Auth Key</button>
+              <button id="ts-logout-btn" class="btn" type="button" data-i18n="vpn.tsLogout" hidden>退出登录</button>
+            </div>
+
+            <div id="ts-key-drawer" class="inline-drawer" hidden>
+              <form id="ts-key-form" novalidate>
+                <div class="ts-key-bar">
+                  <input id="ts-auth-key" class="input mono" type="text" autocomplete="off" placeholder="tskey-auth-..." required>
+                  <button id="ts-key-submit" class="btn btn-primary" type="submit" data-i18n="vpn.tsLogin">登录</button>
+                </div>
+              </form>
+            </div>
+          </section>
+
+          <div class="section-header">
+            <span class="section-title" data-i18n="vpn.sshTitle">普通 SSH</span>
+          </div>
+          <section class="settings-card">
+            <div class="settings-row">
+              <div class="settings-row-left">
+                <span class="row-title" data-i18n="vpn.sshTitle">普通 SSH</span>
+              </div>
+              <div class="settings-row-right">
+                <span class="row-value" data-connect-val="ssh">—</span>
+                <label class="switch">
+                  <input type="checkbox" data-switch="ssh" aria-label="SSH" disabled>
+                  <span class="switch-track"></span>
+                </label>
+              </div>
+            </div>
+            <div class="settings-row">
+              <div class="settings-row-left">
+                <span class="row-title" data-i18n="vpn.sshLogin">登录方式</span>
+              </div>
+              <div class="settings-row-right">
+                <span class="row-value" data-i18n="vpn.sshAuth">root · SSH 公钥</span>
+              </div>
+            </div>
+          </section>
+
+          <div class="section-header">
+            <span class="section-title" data-i18n="vpn.proxyTitle">网络代理</span>
+          </div>
+          <form id="proxy-form" novalidate>
+            <section class="settings-card">
+              <label class="settings-row radio-row">
+                <span class="row-title" data-i18n="vpn.modeDirect">直连</span>
+                <input type="radio" name="proxy-mode" value="direct" class="radio-input">
+              </label>
+
+              <label class="settings-row radio-row">
+                <span class="row-title" data-i18n="vpn.modeProxy">代理</span>
+                <input type="radio" name="proxy-mode" value="proxy" class="radio-input">
+              </label>
+
+              <div id="proxy-config-box" class="proxy-config-box">
+                <label class="form-label" for="proxy-uri" data-i18n="vpn.nodeLabel">代理节点</label>
+                <input id="proxy-uri" class="input mono" type="text" autocomplete="off" spellcheck="false" placeholder="socks5:// · hy2:// · ss://">
+                <label id="proxy-wfc-only-row" class="settings-row" hidden>
+                  <div class="settings-row-left">
+                    <span class="row-title" data-i18n="vpn.wfcOnly">仅代理 Wi-Fi Calling</span>
+                    <span class="row-value" data-i18n="vpn.wfcOnlyHint">UDP 500/4500 走代理，其余直连</span>
+                  </div>
+                  <span class="switch">
+                    <input id="proxy-wfc-only" type="checkbox" data-i18n-aria="vpn.wfcOnly">
+                    <span class="switch-track"></span>
+                  </span>
+                </label>
+              </div>
+
+              <div class="settings-footer">
+                <button id="proxy-save-btn" class="btn btn-primary" type="submit" data-i18n="common.save">保存</button>
+                <button id="proxy-reset-btn" class="btn" type="button" data-i18n="vpn.reset" hidden>还原</button>
+              </div>
+            </section>
+          </form>
+        </div>
+
+        <!-- View 6: Messages (SMS + Forwarding Tab) -->
+        <div data-view="sms" hidden>
+          <section id="compose-panel" class="settings-card compose-card" hidden>
+            <div class="card-bar">
+              <span class="row-title" data-i18n="sms.composeTitle">新信息</span>
+              <button id="compose-close" class="btn btn-sm" type="button" data-i18n="common.cancel">取消</button>
+            </div>
+            <div class="panel-body">
+              <form id="send-form" novalidate>
+                <div class="form-field">
+                  <label class="form-label" for="recipient" data-i18n="sms.recipientLabel">收件人</label>
+                  <input id="recipient" class="input mono" type="tel" autocomplete="off" placeholder="+44..." required>
+                </div>
+                <div class="form-field" style="margin-top:12px">
+                  <label class="form-label" for="message" data-i18n="sms.messageLabel">内容</label>
+                  <textarea id="message" class="input" maxlength="1000" rows="4" required></textarea>
+                </div>
+                <div class="form-actions">
+                  <button id="send-submit" class="btn btn-primary" type="submit" data-i18n="sms.sendBtn">发送</button>
+                </div>
+              </form>
+            </div>
+          </section>
+
+          <section class="settings-card">
+            <div class="card-bar">
+              <div class="tabs" role="tablist">
+                <button type="button" data-sms-box="inbox" class="active" data-i18n="sms.inbox">收件箱</button>
+                <button type="button" data-sms-box="sent" data-i18n="sms.sent">已发送</button>
+                <button type="button" data-sms-box="archive" data-i18n="sms.archive">已归档</button>
+                <button type="button" data-sms-box="forward" data-i18n="sms.forwardTab">短信转发</button>
+              </div>
+              <button id="compose-open" class="btn btn-primary btn-sm" type="button">
+                <svg class="icon icon-sm" viewBox="0 0 24 24" aria-hidden="true">
+                  <line x1="12" y1="5" x2="12" y2="19"></line>
+                  <line x1="5" y1="12" x2="19" y2="12"></line>
+                </svg>
+                <span data-i18n="sms.composeOpen">写短信</span>
+              </button>
+            </div>
+
+            <div id="sms-box-pane">
+              <div id="sms-empty" class="empty-state" hidden></div>
+
+              <div id="sms-workspace" class="sms-workspace" hidden>
+                <div id="sms-list" class="sms-list-pane" role="listbox"></div>
+                <div id="sms-reader" class="sms-reader-pane">
+                  <div class="sms-reader-header">
+                    <div>
+                      <button id="sms-back" class="btn btn-sm sms-mobile-back" type="button">
+                        <svg class="icon icon-sm" viewBox="0 0 24 24" aria-hidden="true">
+                          <line x1="19" y1="12" x2="5" y2="12"></line>
+                          <polyline points="12 19 5 12 12 5"></polyline>
+                        </svg>
+                        <span data-i18n="sms.backToList">返回</span>
+                      </button>
+                      <div id="sms-reader-addr" class="sms-reader-addr">—</div>
+                      <div id="sms-reader-meta" class="sms-reader-meta"></div>
+                    </div>
+                    <div id="sms-reader-actions" class="sms-reader-actions"></div>
+                  </div>
+                  <div id="sms-reader-body" class="sms-reader-body"></div>
+                </div>
+              </div>
+            </div>
+
+            <div id="sms-forward-pane" hidden>
+              <div id="forward-editor"></div>
+            </div>
+          </section>
+        </div>
+
+        <!-- View 7: About Device -->
+        <div data-view="about" hidden>
+          <section class="settings-card">
+            <div class="settings-row">
+              <span class="row-title" data-i18n="device.model">型号</span>
+              <span id="dev-model" class="row-value">—</span>
+            </div>
+            <div class="settings-row">
+              <span class="row-title" data-i18n="device.android">Android 版本</span>
+              <span id="dev-android" class="row-value">—</span>
+            </div>
+            <div class="settings-row">
+              <span class="row-title" data-i18n="device.firmware">固件版本</span>
+              <span id="dev-firmware" class="row-value mono">—</span>
+            </div>
+            <div class="settings-row">
+              <span class="row-title" data-i18n="device.sim">SIM 卡</span>
+              <span id="dev-sim" class="row-value tabular">—</span>
+            </div>
+            <div class="settings-row">
+              <span class="row-title" data-i18n="device.wlanIp">WLAN / 热点地址</span>
+              <span id="dev-wlan-ip" class="row-value mono">—</span>
+            </div>
+            <div class="settings-row">
+              <span class="row-title" data-i18n="device.usbIp">USB 地址</span>
+              <span id="dev-usb-ip" class="row-value mono">—</span>
+            </div>
+            <div class="settings-row">
+              <span class="row-title" data-i18n="device.tsIp">Tailscale 地址</span>
+              <span id="dev-ts-ip" class="row-value mono">—</span>
+            </div>
+            <div class="settings-row">
+              <span class="row-title" data-i18n="device.uptime">运行时间</span>
+              <span id="dev-uptime" class="row-value tabular">—</span>
+            </div>
+            <div class="settings-row">
+              <span class="row-title" data-i18n="device.time">系统时间</span>
+              <span id="dev-time" class="row-value tabular">—</span>
+            </div>
+          </section>
+        </div>
+      </main>
+    </div>
+
+    <!-- Confirmation / Input Modal -->
+    <div id="confirm-modal" class="modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="confirm-title" hidden>
+      <div class="modal-dialog">
+        <div id="confirm-title" class="modal-header"></div>
+        <div class="modal-body">
+          <div id="confirm-body"></div>
+          <div id="confirm-input-wrap" style="margin-top:10px" hidden>
+            <input id="confirm-input" class="input" type="text" autocomplete="off" maxlength="64">
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button id="confirm-cancel" class="btn" type="button"></button>
+          <button id="confirm-ok" class="btn btn-primary" type="button"></button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="/forward-editor.js?v=0.6.0"></script>
+  <script src="/app.js?v=0.6.0-sms-delete3"></script>
+</body>
+</html>

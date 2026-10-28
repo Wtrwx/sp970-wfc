@@ -174,9 +174,10 @@ func enableWFC(ctx context.Context) error {
 }
 
 type networkSettings struct {
-	Mode string `json:"mode"`
-	URI  string `json:"uri"`
-	EPDG string `json:"epdg"`
+	Mode    string `json:"mode"`
+	URI     string `json:"uri"`
+	EPDG    string `json:"epdg"`
+	WFCOnly bool   `json:"wfc_only"`
 }
 
 func parseProxyURI(ctx context.Context, uri string) (map[string]any, string, error) {
@@ -217,9 +218,7 @@ func parseProxyURI(ctx context.Context, uri string) (map[string]any, string, err
 	host := u.Hostname()
 	ip := net.ParseIP(host)
 	if ip == nil {
-		resolver := &net.Resolver{PreferGo: true, Dial: func(ctx context.Context, network, address string) (net.Conn, error) {
-			return (&net.Dialer{}).DialContext(ctx, "udp", "1.1.1.1:53")
-		}}
+		resolver := deviceResolver()
 		ctx, cancel := context.WithTimeout(ctx, 8*time.Second)
 		defer cancel()
 		addresses, e := resolver.LookupIP(ctx, "ip4", host)
@@ -262,52 +261,145 @@ func parseProxyURI(ctx context.Context, uri string) (map[string]any, string, err
 	return config, address, nil
 }
 func proxySummary() map[string]any {
-	raw, _ := os.ReadFile(adminBase + "/psm-direct-tun.json")
-	defer clear(raw)
-	var node map[string]any
-	_ = json.Unmarshal(raw, &node)
-	mode := readSetting("network-mode")
-	if mode == "" {
-		mode = "hysteria2"
+	rawHy2, _ := os.ReadFile(adminBase + "/psm-direct-tun.json")
+	defer clear(rawHy2)
+	var hy2Node map[string]any
+	_ = json.Unmarshal(rawHy2, &hy2Node)
+
+	rawClient, _ := os.ReadFile(adminBase + "/proxy-client.json")
+	defer clear(rawClient)
+	var clientCfg proxyClientConfig
+	_ = json.Unmarshal(rawClient, &clientCfg)
+
+	rawMode := readSetting("network-mode")
+	if rawMode == "" {
+		rawMode = "hysteria2"
 	}
 	epdg := readSetting("epdg-ipv4")
 	if epdg == "" {
 		epdg = "84.246.115.151"
 	}
-	return map[string]any{"mode": mode, "epdg": epdg, "server": node["server"], "configured": node["auth"] != nil && node["auth"] != ""}
+	uri := readSetting("proxy-uri")
+	if uri == "" {
+		uri = reconstructHy2URI(hy2Node)
+	}
+	protocol := ""
+	var server any
+	switch rawMode {
+	case "socks5", "ss":
+		protocol = rawMode
+		server = clientCfg.Server
+	case "hysteria2":
+		protocol = "hysteria2"
+		server = hy2Node["server"]
+	default:
+		if scheme, _, ok := strings.Cut(uri, "://"); ok {
+			switch strings.ToLower(scheme) {
+			case "hy2", "hysteria2":
+				protocol = "hysteria2"
+				server = hy2Node["server"]
+			case "socks5", "socks5h", "socks":
+				protocol = "socks5"
+				server = clientCfg.Server
+			case "ss":
+				protocol = "ss"
+				server = clientCfg.Server
+			}
+		}
+	}
+	uiMode := "proxy"
+	if rawMode == "direct" {
+		uiMode = "direct"
+	}
+	return map[string]any{
+		"mode":       uiMode,
+		"raw_mode":   rawMode,
+		"protocol":   protocol,
+		"uri":        uri,
+		"epdg":       epdg,
+		"server":     server,
+		"configured": uri != "",
+		"wfc_only":   (protocol == "ss" || protocol == "socks5") && clientCfg.WFCOnly,
+	}
 }
 func saveNetwork(ctx context.Context, request networkSettings) error {
 	if err := requireFlight(ctx); err != nil {
 		return err
 	}
-	if request.Mode != "direct" && request.Mode != "hysteria2" {
-		return errors.New("请选择直连或 Hysteria2")
+	switch request.Mode {
+	case "direct", "proxy", "hysteria2", "socks5", "ss":
+	default:
+		return errors.New("请选择直连或代理")
 	}
-	if request.EPDG != "84.246.115.151" && request.EPDG != "84.246.113.151" {
+	epdg := strings.TrimSpace(request.EPDG)
+	if epdg == "" {
+		epdg = readSetting("epdg-ipv4")
+		if epdg == "" {
+			epdg = "84.246.115.151"
+		}
+	}
+	if epdg != "84.246.115.151" && epdg != "84.246.113.151" {
 		return errors.New("ePDG 地址无效")
 	}
-	values := map[string][]byte{"network-mode": []byte(request.Mode + "\n"), "epdg-ipv4": []byte(request.EPDG + "\n")}
-	if request.URI != "" {
-		node, address, err := parseProxyURI(ctx, request.URI)
+	uri := strings.TrimSpace(request.URI)
+	values := map[string][]byte{"epdg-ipv4": []byte(epdg + "\n")}
+	if request.Mode == "direct" {
+		values["network-mode"] = []byte("direct\n")
+		if uri != "" {
+			parsed, err := parseAnyProxyURI(ctx, uri)
+			if err != nil {
+				return err
+			}
+			if request.WFCOnly && parsed.Protocol == "hysteria2" {
+				return errors.New("仅代理 WFC 目前支持 SOCKS5 / Shadowsocks")
+			}
+			parsed.ClientConfig.WFCOnly = request.WFCOnly
+			values["proxy-uri"] = []byte(parsed.CanonicalURI + "\n")
+			values["proxy-ipv4"] = []byte(parsed.ServerIP + "\n")
+			if parsed.Protocol == "hysteria2" {
+				raw, _ := json.Marshal(parsed.Hy2Config)
+				defer clear(raw)
+				values["psm-direct-tun.json"] = raw
+			} else {
+				raw, _ := json.Marshal(parsed.ClientConfig)
+				defer clear(raw)
+				values["proxy-client.json"] = raw
+			}
+		}
+	} else {
+		if uri == "" {
+			uri = readSetting("proxy-uri")
+			if uri == "" {
+				rawHy2, _ := os.ReadFile(adminBase + "/psm-direct-tun.json")
+				var hy2Node map[string]any
+				_ = json.Unmarshal(rawHy2, &hy2Node)
+				clear(rawHy2)
+				uri = reconstructHy2URI(hy2Node)
+			}
+		}
+		if uri == "" {
+			return errors.New("请填写代理节点链接（支持 socks5://、hy2://、ss://）")
+		}
+		parsed, err := parseAnyProxyURI(ctx, uri)
 		if err != nil {
 			return err
 		}
-		raw, _ := json.Marshal(node)
-		defer clear(raw)
-		values["psm-direct-tun.json"] = raw
-		values["proxy-ipv4"] = []byte(address + "\n")
-	} else if request.Mode == "hysteria2" {
-		raw, _ := os.ReadFile(adminBase + "/psm-direct-tun.json")
-		defer clear(raw)
-		var node struct{ Server, Auth string }
-		if json.Unmarshal(raw, &node) != nil || node.Auth == "" {
-			return errors.New("请粘贴 Hysteria2 节点链接")
+		if request.WFCOnly && parsed.Protocol == "hysteria2" {
+			return errors.New("仅代理 WFC 目前支持 SOCKS5 / Shadowsocks")
 		}
-		address, _, err := net.SplitHostPort(node.Server)
-		if err != nil || net.ParseIP(address).To4() == nil {
-			return errors.New("请重新填写 IPv4 节点链接")
+		parsed.ClientConfig.WFCOnly = request.WFCOnly
+		values["network-mode"] = []byte(parsed.Protocol + "\n")
+		values["proxy-uri"] = []byte(parsed.CanonicalURI + "\n")
+		values["proxy-ipv4"] = []byte(parsed.ServerIP + "\n")
+		if parsed.Protocol == "hysteria2" {
+			raw, _ := json.Marshal(parsed.Hy2Config)
+			defer clear(raw)
+			values["psm-direct-tun.json"] = raw
+		} else {
+			raw, _ := json.Marshal(parsed.ClientConfig)
+			defer clear(raw)
+			values["proxy-client.json"] = raw
 		}
-		values["proxy-ipv4"] = []byte(address + "\n")
 	}
 	previous := map[string][]byte{}
 	for name := range values {
@@ -385,7 +477,11 @@ func (h *adminHost) api(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, `{"error":"请登录后台"}`, 401)
 		return
 	}
-	ctx, cancel := context.WithTimeout(context.WithoutCancel(r.Context()), 75*time.Second)
+	timeout := 75 * time.Second
+	if r.URL.Path == "/euicc/download" {
+		timeout = 180 * time.Second
+	}
+	ctx, cancel := context.WithTimeout(context.WithoutCancel(r.Context()), timeout)
 	defer cancel()
 	var response any
 	var err error
@@ -400,6 +496,8 @@ func (h *adminHost) api(w http.ResponseWriter, r *http.Request) {
 			state["wfc_enabled"] = wfcEnabled()
 			state["service_state"] = readSetting("run/state")
 			state["proxy"] = proxySummary()
+			state["tailscale"] = tailscaleSummary(ctx)
+			state["ssh"] = sshSummary()
 			response = state
 		case "/wifi/scan":
 			response, err = androidCall(ctx, map[string]string{"action": "scan"})
@@ -441,7 +539,7 @@ func (h *adminHost) api(w http.ResponseWriter, r *http.Request) {
 			}
 		case "/logout":
 			err = updateUISession(strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer "), true)
-		case "/sms/read", "/sms/archive":
+		case "/sms/read", "/sms/archive", "/sms/delete":
 			var v struct {
 				ID       int64 `json:"id"`
 				Archived bool  `json:"archived"`
@@ -452,6 +550,8 @@ func (h *adminHost) api(w http.ResponseWriter, r *http.Request) {
 			}
 			if r.URL.Path == "/sms/read" {
 				err = markNativeSMSRead(ctx, v.ID)
+			} else if r.URL.Path == "/sms/delete" {
+				err = deleteNativeSMS(ctx, v.ID)
 			} else {
 				err = archiveNativeSMS(v.ID, v.Archived)
 			}
@@ -500,22 +600,95 @@ func (h *adminHost) api(w http.ResponseWriter, r *http.Request) {
 			if wfcEnabled() {
 				_ = serviceControl(ctx, "start")
 			}
+		case "/wifi":
+			var v struct {
+				Enabled *bool `json:"enabled"`
+			}
+			if json.NewDecoder(r.Body).Decode(&v) != nil || v.Enabled == nil {
+				err = errors.New("开关参数无效")
+				break
+			}
+			response, err = androidCall(ctx, map[string]any{"action": "wifi", "enabled": *v.Enabled})
+		case "/wifi/disconnect":
+			response, err = androidCall(ctx, map[string]any{"action": "wifi_disconnect"})
+		case "/wifi/forget":
+			var v struct {
+				ID   *int   `json:"network_id"`
+				SSID string `json:"ssid"`
+			}
+			if json.NewDecoder(r.Body).Decode(&v) != nil || ((v.ID == nil || *v.ID < 0) && strings.TrimSpace(v.SSID) == "") {
+				err = errors.New("Wi-Fi 参数无效")
+				break
+			}
+			req := map[string]any{"action": "wifi_forget", "ssid": v.SSID}
+			if v.ID != nil {
+				req["network_id"] = *v.ID
+			}
+			response, err = androidCall(ctx, req)
 		case "/wifi/connect":
 			var v struct {
 				SSID     string `json:"ssid"`
 				Password string `json:"password"`
 				Security string `json:"security"`
 				ID       *int   `json:"network_id"`
+				Saved    bool   `json:"saved"`
 			}
 			if json.NewDecoder(r.Body).Decode(&v) != nil {
 				err = errors.New("Wi-Fi 参数无效")
 				break
 			}
-			request := map[string]any{"action": "connect", "ssid": v.SSID, "password": v.Password, "security": v.Security}
+			request := map[string]any{"action": "connect", "ssid": v.SSID, "password": v.Password, "security": v.Security, "saved": v.Saved}
 			if v.ID != nil {
 				request["network_id"] = *v.ID
 			}
 			response, err = androidCall(ctx, request)
+		case "/hotspot":
+			var v struct {
+				Enabled *bool `json:"enabled"`
+			}
+			if json.NewDecoder(r.Body).Decode(&v) != nil || v.Enabled == nil {
+				err = errors.New("开关参数无效")
+				break
+			}
+			response, err = androidCall(ctx, map[string]any{"action": "hotspot", "enabled": *v.Enabled})
+		case "/hotspot/config":
+			var v struct {
+				SSID      *string `json:"ssid"`
+				Security  *string `json:"security"`
+				Password  string  `json:"password"`
+				Broadcast *bool   `json:"broadcast"`
+			}
+			if json.NewDecoder(r.Body).Decode(&v) != nil || (v.SSID == nil && v.Security == nil && v.Broadcast == nil) {
+				err = errors.New("热点参数无效")
+				break
+			}
+			request := map[string]any{"action": "hotspot_config"}
+			if v.SSID != nil {
+				request["ssid"] = *v.SSID
+			}
+			if v.Security != nil {
+				request["security"] = *v.Security
+				request["password"] = v.Password
+			}
+			if v.Broadcast != nil {
+				request["broadcast"] = *v.Broadcast
+			}
+			response, err = androidCall(ctx, request)
+		case "/usb-tether", "/mobile-data", "/data-roaming":
+			var v struct {
+				Enabled *bool `json:"enabled"`
+			}
+			if json.NewDecoder(r.Body).Decode(&v) != nil || v.Enabled == nil {
+				err = errors.New("开关参数无效")
+				break
+			}
+			actionName := "usb_tether"
+			if r.URL.Path == "/mobile-data" {
+				actionName = "mobile_data"
+			} else if r.URL.Path == "/data-roaming" {
+				actionName = "data_roaming"
+			}
+			response, err = androidCall(ctx, map[string]any{"action": actionName, "enabled": *v.Enabled})
 		case "/euicc/enable":
 			var v struct {
 				ID string `json:"id"`
@@ -525,6 +698,81 @@ func (h *adminHost) api(w http.ResponseWriter, r *http.Request) {
 				break
 			}
 			response, err = switchEuicc(ctx, v.ID)
+		case "/euicc/disable":
+			var v struct {
+				ID string `json:"id"`
+			}
+			if json.NewDecoder(r.Body).Decode(&v) != nil {
+				err = errors.New("配置参数无效")
+				break
+			}
+			response, err = disableEuicc(ctx, v.ID)
+		case "/euicc/nickname":
+			var v struct {
+				ID       string `json:"id"`
+				ICCID    string `json:"iccid"`
+				Nickname string `json:"nickname"`
+			}
+			if json.NewDecoder(r.Body).Decode(&v) != nil || (strings.TrimSpace(v.ID) == "" && strings.TrimSpace(v.ICCID) == "") {
+				err = errors.New("配置参数无效")
+				break
+			}
+			response, err = renameEuicc(ctx, v.ID, v.ICCID, v.Nickname)
+		case "/euicc/delete":
+			var v struct {
+				ID    string `json:"id"`
+				ICCID string `json:"iccid"`
+			}
+			if json.NewDecoder(r.Body).Decode(&v) != nil || (strings.TrimSpace(v.ID) == "" && strings.TrimSpace(v.ICCID) == "") {
+				err = errors.New("配置参数无效")
+				break
+			}
+			response, err = deleteEuicc(ctx, v.ID, v.ICCID)
+		case "/euicc/download":
+			var v euiccDownloadRequest
+			if json.NewDecoder(r.Body).Decode(&v) != nil {
+				err = errors.New("激活码参数无效")
+				break
+			}
+			response, err = downloadEuicc(ctx, v)
+		case "/ssh":
+			var v struct {
+				Enabled *bool `json:"enabled"`
+			}
+			if json.NewDecoder(r.Body).Decode(&v) != nil || v.Enabled == nil {
+				err = errors.New("开关参数无效")
+				break
+			}
+			response, err = setSSHEnabled(ctx, *v.Enabled)
+		case "/tailscale":
+			var v struct {
+				Enabled *bool `json:"enabled"`
+			}
+			if json.NewDecoder(r.Body).Decode(&v) != nil || v.Enabled == nil {
+				err = errors.New("开关参数无效")
+				break
+			}
+			response, err = setTailscaleEnabled(ctx, *v.Enabled)
+		case "/tailscale/ssh":
+			var v struct {
+				Enabled *bool `json:"enabled"`
+			}
+			if json.NewDecoder(r.Body).Decode(&v) != nil || v.Enabled == nil {
+				err = errors.New("开关参数无效")
+				break
+			}
+			response, err = setTailscaleSSH(ctx, *v.Enabled)
+		case "/tailscale/login":
+			var v struct {
+				AuthKey string `json:"auth_key"`
+			}
+			if json.NewDecoder(r.Body).Decode(&v) != nil {
+				err = errors.New("登录参数无效")
+				break
+			}
+			response, err = loginTailscale(ctx, v.AuthKey)
+		case "/tailscale/logout":
+			response, err = logoutTailscale(ctx)
 		default:
 			http.NotFound(w, r)
 			return
@@ -553,7 +801,7 @@ func serveAdmin(ctx context.Context) error {
 		return err
 	}
 	defer os.Remove(adminBase + "/run/admin.pid")
-	server := &http.Server{Handler: http.HandlerFunc((&adminHost{}).api), ReadHeaderTimeout: 5 * time.Second, ReadTimeout: 15 * time.Second, WriteTimeout: 85 * time.Second, IdleTimeout: 30 * time.Second, MaxHeaderBytes: 8192}
+	server := &http.Server{Handler: http.HandlerFunc((&adminHost{}).api), ReadHeaderTimeout: 5 * time.Second, ReadTimeout: 15 * time.Second, WriteTimeout: 200 * time.Second, IdleTimeout: 30 * time.Second, MaxHeaderBytes: 8192}
 	go func() {
 		<-ctx.Done()
 		closeCtx, cancel := context.WithTimeout(context.Background(), 3*time.Second)

@@ -10,8 +10,8 @@ NETWORK_MODE=$(cat "$BASE/network-mode" 2>/dev/null)
 NODE_IP=$(cat "$BASE/proxy-ipv4" 2>/dev/null)
 EPDG=$(cat "$BASE/epdg-ipv4" 2>/dev/null)
 [ -n "$EPDG" ] || EPDG=84.246.115.151
-case "$NETWORK_MODE" in hysteria2|direct) ;; *) echo "Invalid network mode"; exit 1;; esac
-if [ "$NETWORK_MODE" = hysteria2 ]; then
+case "$NETWORK_MODE" in hysteria2|socks5|ss|direct) ;; *) echo "Invalid network mode"; exit 1;; esac
+if [ "$NETWORK_MODE" = hysteria2 ] || [ "$NETWORK_MODE" = socks5 ] || [ "$NETWORK_MODE" = ss ]; then
     case "$NODE_IP" in ''|*[!0-9.]*) echo "Invalid proxy IPv4"; exit 1;; esac
 fi
 METRIC=27027
@@ -20,6 +20,7 @@ LOG=$BASE/log
 CONFIG=$BASE/psm-direct-tun.json
 PROXY=$BASE/bin/hysteria
 WFC=$BASE/bin/sp970-wfc
+SSH=$BASE/bin/dropbearmulti
 export PATH=/system/bin:/system/xbin:/sbin
 export LD_LIBRARY_PATH=/system/vendor/lib:/system/lib
 
@@ -34,8 +35,12 @@ matches() {
     OPID=$2
     case "$OPID" in ''|*[!0-9]*|0|1) return 1;; esac
     [ -r "/proc/$OPID/cmdline" ] || return 1
-    OEXE=$($BB readlink "/proc/$OPID/exe")
-    OCMD=$($BB tr '\000' ' ' <"/proc/$OPID/cmdline")
+    OEXE=$($BB readlink "/proc/$OPID/exe" 2>/dev/null) || return 1
+    OEXE=${OEXE%" (deleted)"}
+    # A process can exit between the readability check and this read. Keep
+    # that race inside cat, rather than a fatal mksh input redirection.
+    OCMD=$($BB cat "/proc/$OPID/cmdline" 2>/dev/null | $BB tr '\000' ' ') || return 1
+    [ -n "$OCMD" ] || return 1
     case "$1:$OEXE" in
         proxy:$PROXY|proxy:/data/local/tmp/sp970_hysteria_stable_tun)
             case " $OCMD " in *" client "*" -c $CONFIG "*) return 0;; esac;;
@@ -43,6 +48,8 @@ matches() {
             case " $OCMD " in *" --admin "*) return 1;; *) return 0;; esac;;
         admin:$WFC)
             case " $OCMD " in *" --admin "*) return 0;; esac;;
+        ssh:$SSH)
+            case " $OCMD " in *" dropbear "*" -P $RUN/ssh.pid "*) return 0;; esac;;
         supervisor:/system/bin/mksh|supervisor:/system/bin/sh)
             case " $OCMD " in *" $SELF supervise "*) return 0;; esac;;
     esac
@@ -135,7 +142,7 @@ start_proxy() {
     "$IP" -4 route replace "$NODE_IP/32" via "$GATEWAY" dev wlan0 metric "$METRIC" || return 1
     rotate "$LOG/proxy.log"
     "$PROXY" client --disable-update-check --log-level info -c "$CONFIG" \
-        9>&- >"$LOG/proxy.log" 2>&1 </dev/null &
+        3>&- 4>&- 5>&- 6>&- 7>&- 8>&- 9>&- >"$LOG/proxy.log" 2>&1 </dev/null &
     echo $! >"$RUN/proxy.pid"
     "$BB" cp "$RUN/proxy.pid" /data/local/tmp/psm.pid
     note "started proxy pid=$(cat "$RUN/proxy.pid")"
@@ -152,7 +159,7 @@ start_wfc() {
     # Deliberately omit --self-test. Never sends test messages.
     "$WFC" --dh-group 14 --port 4500 --epdg-ip "$EPDG" \
         --dns 1.1.1.1 --ims-probe --hold 25m \
-        9>&- >"$LOG/wfc.log" 2>&1 </dev/null &
+        3>&- 4>&- 5>&- 6>&- 7>&- 8>&- 9>&- >"$LOG/wfc.log" 2>&1 </dev/null &
     echo $! >"$RUN/wfc.pid"
     "$BB" cp "$RUN/wfc.pid" /data/local/tmp/sp970-wfc-active.pid
     note "started WFC pid=$(cat "$RUN/wfc.pid")"
@@ -168,7 +175,7 @@ ensure_webui() {
         >/dev/null 2>&1 || return 1
     rotate "$LOG/nginx.log"
     /system/bin/nginx -p /sdcard/nginx -c /system/etc/nginx/conf/nginx.conf \
-        9>&- >"$LOG/nginx.log" 2>&1 </dev/null &
+        3>&- 4>&- 5>&- 6>&- 7>&- 8>&- 9>&- >"$LOG/nginx.log" 2>&1 </dev/null &
     echo $! >"$RUN/nginx.pid"
     note 'started native WebUI with WFC API route'
 }
@@ -183,6 +190,75 @@ finish() {
     rm -f "$RUN/supervisor.pid"
     echo stopped >"$RUN/state"
     note 'service stopped'
+}
+
+ensure_tailscale() {
+    [ -e "$BASE/tailscale-enabled" ] || return 0
+    [ -x "$BASE/bin/tailscaled" ] || return 0
+    TS_PID=$(cat "$RUN/tailscaled.pid" 2>/dev/null)
+    if [ -n "$TS_PID" ] && [ -r "/proc/$TS_PID/cmdline" ] && "$BB" tr '\000' ' ' <"/proc/$TS_PID/cmdline" | "$BB" grep -q tailscaled; then
+        return 0
+    fi
+    mkdir -p "$BASE/tailscale"
+    chmod 700 "$BASE/tailscale"
+    # Linux Tailscale SSH expects `id -G` to return numeric groups.
+    # Keep the BusyBox replacement private to Tailscale on this Android firmware.
+    mkdir -p "$BASE/ssh-bin" || return 1
+    chmod 700 "$BASE/ssh-bin"
+    "$BB" ln -sf "$BB" "$BASE/ssh-bin/id" || return 1
+    rm -f "$RUN/tailscaled.sock"
+    rotate "$LOG/tailscaled.log"
+    SSL_CERT_FILE="$BASE/ca-roots.pem" HOME="$BASE/tailscale" SHELL=/system/bin/sh PATH="$BASE/ssh-bin:$PATH" \
+        TAILSCALE_SSH_DEFAULT_PATH="$BASE/ssh-bin:/system/bin:/system/xbin:/sbin:$BASE/bin" \
+        "$BB" nohup "$BB" setsid "$BASE/bin/tailscaled" \
+        --statedir="$BASE/tailscale" \
+        --socket="$RUN/tailscaled.sock" \
+        --tun=tailscale0 \
+        --socks5-server=127.0.0.1:1055 \
+        3>&- 4>&- 5>&- 6>&- 7>&- 8>&- 9>&- >>"$LOG/tailscaled.log" 2>&1 </dev/null &
+    echo $! >"$RUN/tailscaled.pid"
+    note "started tailscaled pid=$(cat "$RUN/tailscaled.pid")"
+}
+
+stop_native_ssh() {
+    # The native launcher is overlaid separately; retire its old daemon too.
+    "$BB" awk '$4 == "0A" && $2 ~ /:126F$/ {found=1} END {exit !found}' \
+        /proc/net/tcp /proc/net/tcp6 || return 0
+    for SSH_PROC in /proc/[0-9]*/exe; do
+        [ "$("$BB" readlink "$SSH_PROC" 2>/dev/null)" = /system/xbin/dropbear ] || continue
+        SSH_PROC=${SSH_PROC%/exe}
+        SSH_ARGS=$("$BB" tr '\000' ' ' <"$SSH_PROC/cmdline" 2>/dev/null)
+        case " $SSH_ARGS " in
+            *" -p 4719 "*) kill -TERM "${SSH_PROC##*/}" 2>/dev/null;;
+        esac
+    done
+    return 0
+}
+
+sync_ssh() {
+    stop_native_ssh
+    if [ ! -e "$BASE/ssh-enabled" ]; then
+        stop_role ssh
+        return 0
+    fi
+    owned ssh && return 0
+    [ -x "$SSH" ] && [ -s /system/sp970-ssh/authorized_keys ] || return 1
+    mkdir -p "$BASE/ssh"
+    chmod 700 "$BASE/ssh"
+    if [ ! -s "$BASE/ssh/host_ed25519" ]; then
+        "$SSH" dropbearkey -t ed25519 -f "$BASE/ssh/host_ed25519" >>"$LOG/ssh.log" 2>&1 || return 1
+    fi
+    chmod 600 "$BASE/ssh/host_ed25519"
+    "$BB" nohup "$BB" setsid "$SSH" dropbear -F -p 22 \
+        -P "$RUN/ssh.pid" -r "$BASE/ssh/host_ed25519" -D /system/sp970-ssh \
+        3>&- 4>&- 5>&- 6>&- 7>&- 8>&- 9>&- \
+        >>"$LOG/ssh.log" 2>&1 </dev/null &
+    sleep 1
+    owned ssh
+}
+
+ensure_ssh() {
+    "$BB" flock "$RUN/ssh-control.lock" /system/bin/sh "$SELF" ssh-sync
 }
 
 supervise() {
@@ -204,6 +280,8 @@ supervise() {
     PREVIOUS_GATEWAY=
     while [ ! -e "$BASE/disabled" ]; do
         owned admin || start_admin
+        ensure_tailscale
+        ensure_ssh
         if [ "$(getprop sys.boot_completed)" != 1 ]; then
             set_state 'waiting: Android boot'
         elif [ "$(settings get global airplane_mode_on)" != 1 ]; then
@@ -226,7 +304,11 @@ supervise() {
                 fi
                 PREVIOUS_GATEWAY=$GATEWAY
                 NETWORK_READY=0
-                if [ "$NETWORK_MODE" = direct ]; then
+                if [ "$NETWORK_MODE" = direct ] || [ "$NETWORK_MODE" = socks5 ] || [ "$NETWORK_MODE" = ss ]; then
+                    if owned proxy; then
+                        stop_role proxy
+                        remove_routes
+                    fi
                     NETWORK_READY=1
                 else
                     if ! owned proxy; then
@@ -265,12 +347,14 @@ status() {
 }
 
 start() {
+    # Close inherited lock descriptors on every background launch. Long-lived
+    # children (especially Tailscale/admin) must not keep a supervisor lock alive.
     start_admin || return 1
     [ ! -e "$BASE/disabled" ] || { echo 'autostart disabled'; return 1; }
     if ! owned supervisor; then
         "$BB" nohup "$BB" setsid "$BB" flock -n "$RUN/service.lock" \
             /system/bin/sh "$SELF" supervise \
-            >>"$LOG/supervisor.log" 2>&1 </dev/null &
+            3>&- 4>&- 5>&- 6>&- 7>&- 8>&- 9>&- >>"$LOG/supervisor.log" 2>&1 </dev/null &
         # The caller may be an ADB shell. Let nohup/setsid finish before exit.
         sleep 3
     fi
@@ -280,9 +364,12 @@ start() {
 
 start_admin() {
     ensure_webui || return 1
+    ensure_tailscale
+    ensure_ssh
     if ! owned admin; then
         "$BB" nohup "$BB" setsid "$BB" flock -n "$RUN/admin.lock" \
-            "$WFC" --admin >>"$LOG/admin.log" 2>&1 </dev/null &
+            "$WFC" --admin \
+            3>&- 4>&- 5>&- 6>&- 7>&- 8>&- 9>&- >>"$LOG/admin.log" 2>&1 </dev/null &
         sleep 1
     fi
     owned admin
@@ -294,6 +381,8 @@ case "$1" in
     status) status;;
     admin) start_admin;;
     stop-admin) stop_role admin;;
+    ssh) ensure_ssh;;
+    ssh-sync) sync_ssh;;
     pause)
         if owned supervisor; then kill -TERM "$OPID"; fi
         echo 'runtime stopping; autostart preference retained';;
@@ -302,5 +391,5 @@ case "$1" in
         touch "$BASE/disabled"
         if owned supervisor; then kill -TERM "$OPID"; fi
         echo 'autostart disabled; owned runtime is stopping';;
-    *) echo 'Usage: service-control.sh start|status|enable|disable|admin|stop-admin|pause'; exit 2;;
+    *) echo 'Usage: service-control.sh start|status|enable|disable|admin|stop-admin|ssh|pause'; exit 2;;
 esac

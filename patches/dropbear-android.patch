@@ -1,0 +1,16 @@
+--- a/src/common-session.c
++++ b/src/common-session.c
+@@ -646,6 +646,13 @@
+ }
+ 
+ const char* get_user_shell() {
++#if defined(__ANDROID__)
++	/* SP970_ANDROID_SHELL: static Bionic reports /bin/sh for root. */
++	if (ses.authstate.pw_shell[0] == '\0' ||
++		strcmp(ses.authstate.pw_shell, "/bin/sh") == 0) {
++		return "/system/bin/sh";
++	}
++#endif
+ 	/* an empty shell should be interpreted as "/bin/sh" */
+ 	if (ses.authstate.pw_shell[0] == '\0') {
+ 		return "/bin/sh";

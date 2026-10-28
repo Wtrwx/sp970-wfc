@@ -1,0 +1,61 @@
+--- a/smali/com/pingbao/ZyScreenService.smali
++++ b/smali/com/pingbao/ZyScreenService.smali
+@@ -1653,6 +1653,19 @@
+     .param p1, "wM"    # Landroid/net/wifi/WifiManager;
+ 
+     .prologue
++    if-eqz p0, :sp970_native_wifi_state_ok
++
++    invoke-static {}, Lwebsocket_server/RootCmd;->getWifiState()Z
++
++    move-result v0
++
++    if-nez v0, :sp970_native_wifi_state_ok
++
++    const/4 v0, 0x0
++
++    return v0
++
++    :sp970_native_wifi_state_ok
+     const/4 v4, 0x0
+ 
+     .line 919
+--- a/smali/com/pingbao/MainActivity.smali
++++ b/smali/com/pingbao/MainActivity.smali
+@@ -1347,7 +1347,11 @@
+ 
+     .line 453
+     :goto_1
+-    const/4 v3, 0x1
++    sget-object v3, Lcom/pingbao/MainActivity;->context:Landroid/content/Context;
++
++    invoke-static {v3}, Lcom/pingbao/NetworkMemory;->hotspotAtBoot(Landroid/content/Context;)Z
++
++    move-result v3
+ 
+     .line 454
+     .local v3, "wifiState":Z
+@@ -2301,7 +2305,11 @@
+     .line 251
+     iget-object v11, p0, Lcom/pingbao/MainActivity;->mConnectivityManager:Landroid/net/ConnectivityManager;
+ 
+-    const/4 v12, 0x1
++    sget-object v12, Lcom/pingbao/MainActivity;->context:Landroid/content/Context;
++
++    invoke-static {v12}, Lcom/pingbao/NetworkMemory;->usbAtBoot(Landroid/content/Context;)Z
++
++    move-result v12
+ 
+     invoke-virtual {v11, v12}, Landroid/net/ConnectivityManager;->setUsbTethering(Z)I
+ 
+@@ -2324,6 +2332,10 @@
+     invoke-direct {v11, v12, v13}, Landroid/content/Intent;-><init>(Landroid/content/Context;Ljava/lang/Class;)V
+ 
+     invoke-virtual {p0, v11}, Lcom/pingbao/MainActivity;->startService(Landroid/content/Intent;)Landroid/content/ComponentName;
++
++    sget-object v11, Lcom/pingbao/MainActivity;->context:Landroid/content/Context;
++
++    invoke-static {v11}, Lcom/pingbao/NetworkMemory;->finishBoot(Landroid/content/Context;)V
+ 
+     .line 268
+     const-string v11, "pingbao MainActivity"

@@ -23,7 +23,7 @@ BOOT = "/data/adb/service.d/90-sp970-wfc.sh"
 NGINX = "/system/etc/nginx/conf/nginx.conf"
 WWW = "/system/var/www"
 MARKER = "# SP970-WFC managed API"
-CONSOLE_ASSETS = ("index.html", "login.html", "app.js", "app.css", "forward-editor.js", "wfc-panel.html", "wfc-settings.html")
+CONSOLE_ASSETS = ("index.html", "login.html", "app.js", "app.css", "forward-editor.js", "wfc-panel.html", "wfc-settings.html", "wfc-unavailable.json")
 LEGACY_ROUTES = {"sms-device.html": "sms", "sms-sim.html": "sms", "sms-set.html": "sms", "sms-forward.html": "forward"}
 
 
@@ -33,7 +33,7 @@ def console_redirect(view: str) -> str:
     target = "/index.html#" + view
     return ('<!doctype html><html lang="zh-CN"><meta charset="utf-8">'
             '<meta name="viewport" content="width=device-width,initial-scale=1">'
-            '<title>SP970 控制台</title><script>location.replace("' + target + '");</script>'
+            '<title>控制台</title><script>location.replace("' + target + '");</script>'
             '<a href="' + target + '">打开控制台</a></html>\n')
 
 
@@ -131,9 +131,29 @@ def patch_nginx(text: str) -> str:
             access_log off;
         }
 """
-    if not api:
-        return text
-    return text[:anchor.start()] + "\n" + api + text[anchor.start():]
+    if api:
+        text = text[:anchor.start()] + "\n" + api + text[anchor.start():]
+    # A stopped API must not inherit the stock /50x.html handler. Its document
+    # root is inaccessible to Android's unprivileged worker and masks 502 as 403.
+    for route in ("/wfc/", "/wfc-admin/"):
+        def add_unavailable_handler(match):
+            if "=503 /wfc-unavailable.json" in match.group(2):
+                return match.group(0)
+            return (match.group(1) + "\n            error_page 502 503 504 =503 /wfc-unavailable.json;"
+                    + match.group(2))
+        text = re.sub(r"(location\s+" + re.escape(route) + r"\s*\{)([^{}]*\})",
+                      add_unavailable_handler, text, count=1)
+    if not re.search(r"location\s*=\s*/wfc-unavailable\.json\s*\{", text):
+        anchor = re.search(r"(?m)^\s*location\s+/\s*\{", text)
+        # Stock Nginx omits ngx_http_rewrite_module, including `return`.
+        fallback = """        location = /wfc-unavailable.json {
+            internal;
+            root /system/var/www;
+            default_type application/json;
+        }
+"""
+        text = text[:anchor.start()] + "\n" + fallback + text[anchor.start():]
+    return text
 
 
 def restore_added_native_pages(backup: str) -> str:
@@ -223,6 +243,8 @@ def preflight(adb: Adb) -> dict:
     if sdk != "19" or not arch.startswith("armv7"):
         raise ValueError(f"此版本只支持已验证的 Android 4.4 / ARMv7，当前 SDK={sdk}, arch={arch}")
     adb.shell("test -f /system/vendor/lib/libqmi.so && test -x /system/xbin/busybox && test -x /system/xbin/sqlite3 && test -x /system/bin/nginx && magisk -v >/dev/null")
+    if adb.shell("if [ -x /data/adb/magisk/busybox ]; then echo ready; fi") != "ready":
+        raise ValueError("Magisk 自启环境不完整：缺少 /data/adb/magisk/busybox，请先修复 Magisk 后再安装")
     if adb.shell("settings get global airplane_mode_on") != "1":
         raise ValueError("请先从原生后台开启飞行模式，保持 Wi-Fi 开启；安装器不会自动打开或关闭蜂窝射频")
     gateway = adb.shell("/system/bin/ip -4 route show default dev wlan0")

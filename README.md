@@ -6,6 +6,14 @@
 
 [下载最新安装包](https://github.com/Wtrwx/sp970-wfc/releases/latest) · [安装与卸载](docs/INSTALL.md) · [故障排除](docs/TROUBLESHOOTING.md) · [开发与构建](docs/DEVELOPMENT.md)
 
+## 界面预览
+
+简洁侧栏、中英双语，桌面端使用更宽的内容区和更大的控件；短信列表与阅读区随窗口高度展开，手机端保留独立适配。以下为当前 `main` 分支的界面，均使用演示数据，不含真实短信、号码或节点凭据；发布包以对应版本为准。
+
+![桌面短信管理：收件箱、阅读、归档和单条删除](docs/images/desktop-sms.jpg)
+
+![连接设置：飞行模式、WLAN、热点、Wi-Fi 通话与 Tailscale](docs/images/desktop-settings.jpg)
+
 ## 支持范围
 
 | 项目 | 当前状态 |
@@ -13,20 +21,20 @@
 | 设备 | SP970-B V13，MSM8916 / ARMv7，Android 4.4.4 / SDK 19 |
 | 权限 | 已有 root / Magisk、BusyBox、原生 Nginx 和管理后台 |
 | SIM | 已验证 Lebara UK，当前 IMSI 前缀 **23487**，两位 MNC |
-| 网络 | 已连上 Wi-Fi；可选棒子上的 Hysteria2 代理或已提供可用出口的路由器 |
+| 网络 | 已连上 Wi-Fi；支持 Hysteria2、SOCKS5、Shadowsocks / SS2022，或由路由器提供出口 |
 | 功能 | 真实 ePDG / EAP-AKA / IMS 注册、短信收发、HTTPS 转发、Wi-Fi 与现有 eSIM 配置管理 |
 | 自启 | Magisk `service.d`；等待 Wi-Fi，避免重复启动，退出后恢复 |
 | 其他卡、Android 版本和硬件 | 未验证；安装器会拒绝不符合已验证范围的设备 |
 
 SIM 必须先在原生后台保持飞行模式、Wi-Fi 开启。WFC 注册只读取身份与进行 SIM AKA 鉴权，不改写 IMSI 或 SIM 策略。eSIM 页面可以显式切换小白卡中已有的配置；切换后重新检查策略，仅在 `23487` 下恢复 WFC。若已经变成 `20404`，本工具不能把它改回 `23487`。
 
-部分原厂管理 APK 会在开机时强制开启热点，覆盖已保存的 Wi-Fi 状态。本工具不重签或替换厂商 APK；请先确认原生 Wi-Fi 能自动重连，相关修复参考 [原生 Wi-Fi 补丁](patches/native-wifi-state.patch)。已测试环境包含这项修复。USB 共享设置由原生固件管理。
+Wi-Fi、热点和 USB 网络共享应在开机时恢复上次的开关状态；原厂管理程序的状态记忆补丁见 [native-network-memory.patch](patches/native-network-memory.patch)。补丁通过系统广播保存状态，控制台和原厂页面中的开关均可记忆。Magisk 启动脚本只负责启动服务，并在每次开机时开启已安装的 Tailscale，沿用已有登录和网络配置；它不改动这三个网络开关。Tailscale 启动日志位于 `/data/adb/sp970-wfc/log/boot-network.log`，首次使用仍需在控制台登录。
 
 ## 快速开始
 
 电脑需要 Python 3.10+ 和 [Android Platform Tools / adb](https://developer.android.com/tools/releases/platform-tools)。Windows 可用 `py -3` 替代 `python3`。
 
-1. 下载 Releases 中的 `sp970-wfc-v0.3.0-android-armv7.zip`，解压。
+1. 下载 Releases 中的 `sp970-wfc-<版本>-android-armv7.zip`，解压。
 2. 棒子插好 SIM，开启飞行模式，连接已保存的 Wi-Fi，通过 USB 允许 ADB/root。
 3. 在解压目录运行：
 
@@ -50,9 +58,10 @@ http://<棒子的Wi-Fi地址>/index.html
 
 - 概览：Wi-Fi、WFC、飞行模式与 SIM 策略的实际状态。
 - 网络与 WFC：服务开关、代理链接、ePDG、Wi-Fi 扫描与连接。节点链接留空会保留当前账号；节点密码不返回前端。
-- 短信：收件箱、已发送、可恢复归档与显式发送。
+- 短信：收件箱、已发送、可恢复归档、单条删除与显式发送；删除前需确认。
 - 短信转发：cURL 设置在 WFC 离线时仍可读写，运行中的服务自动加载更新。
-- eSIM 管理：读取已安装配置，并由用户确认后切换。没有下载、删除、重置或原始 APDU 接口。
+- eSIM 管理：读取配置，并按用户操作启用、停用、改名、删除或通过激活码下载安装。删除前需确认，已启用的配置必须先停用；不提供恢复出厂或任意 APDU 接口。
+- VPN 与代理：已安装组件时，可分别控制 Tailscale、Tailscale SSH 和普通 SSH。普通 SSH 使用 22 端口与已配置的公钥；两个 SSH 开关分别保存，Tailscale 连接仍按上述开机规则恢复。
 
 管理服务独立于 IMS 注册启动，沿用原生账号；会话有效期 8 小时，退出会立即撤销。飞行模式只在用户操作开关时改变。版本验证未切换飞行模式、未切换真实 eSIM，也未发送测试短信；已在真实小白卡读取配置列表。操作说明见 [控制台](docs/CONSOLE.md)。
 
@@ -104,6 +113,8 @@ python3 setup.py status --serial YOUR_SERIAL --adb-host 127.0.0.1 --adb-port 150
 当前采用每轮最多 25 分钟的独立进程，结束后由服务重新注册；运营商返回更短有效期时会提前结束。每次都重新检查飞行模式和 SIM 策略。该周期是本工具的实现选择，不是运营商统一规定。
 
 使用棒子上的代理时，**代理需要持续可用**，收发短信也通过隧道。可直接在“网络与 WFC”中更换节点；不需要维持同一个出口 IP。原生拨号、语音通话、iPhone 系统 WFC 转接均不在当前功能范围。
+
+控制台“VPN 与代理”可以粘贴 `ss://` 链接，支持旧版 `aes-128-gcm` / `aes-256-gcm`，以及 SS2022 的 `2022-blake3-aes-128-gcm`、`2022-blake3-aes-256-gcm`、`2022-blake3-chacha20-poly1305`。SS2022 使用对应长度的 Base64 密钥，保留 URL 编码的 `+`、`/` 和 `=`；不支持 SIP003 外置插件。默认 ePDG UDP 和 HTTPS 转发 TCP 都经过所选节点；对于只放行 IPsec 的 SS / SOCKS5 节点，开启“仅代理 Wi-Fi Calling”，只有 UDP 500/4500 经过节点，短信转发、eSIM 下载及其他请求使用本地网络。这是端口分流，无法区分同端口的其他 IPsec 流量。SS2022 时间校验要求设备时钟准确。安装向导仍先配置 Hysteria2 或直连，安装后可在控制台改用 SS。
 
 ## 验证边界
 

@@ -34,6 +34,11 @@ This project includes the following separately attributed components:
    The project supplies only the transport adapter for the existing vendor QMI
    library. No vendor library or card-specific keys are distributed.
 
+5. SagerNet/sing-shadowsocks v0.2.8, GPL-3.0-or-later.
+   https://github.com/SagerNet/sing-shadowsocks/tree/v0.2.8
+   Provides Shadowsocks 2022 TCP/UDP encryption, replay checks and session handling.
+   Its upstream license and dependency notices are included in release packages.
+
 No proprietary firmware APK, vendor libqmi.so binary, device SMS, SIM secrets,
 private proxy account, signing key, or hosted forwarding credential is included.
 The device's existing vendor library and account database are read at runtime.

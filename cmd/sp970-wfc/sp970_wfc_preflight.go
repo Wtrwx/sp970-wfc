@@ -303,7 +303,7 @@ func run(parent context.Context) error {
 	}
 	event("epdg_dns", map[string]any{"host": host, "addresses": ips, "dns": *dns, "source": source})
 	remote := net.JoinHostPort(ips[0].String(), strconv.Itoa(*port))
-	conn, err := (&net.Dialer{Timeout: 5 * time.Second}).DialContext(ctx, "udp4", remote)
+	conn, err := dialEPDGUDP(ctx, remote)
 	if err != nil {
 		return err
 	}

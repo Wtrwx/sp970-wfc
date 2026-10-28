@@ -105,14 +105,12 @@ func newSMSForwarder(dir string) (*smsForwarder, error) {
 		roots.AppendCertsFromPEM(pem)
 		clear(pem)
 	}
-	resolver := &net.Resolver{PreferGo: true, Dial: func(ctx context.Context, network, _ string) (net.Conn, error) {
-		return (&net.Dialer{Timeout: 5 * time.Second}).DialContext(ctx, network, "1.1.1.1:53")
-	}}
+	resolver := deviceResolver()
 	f.client = &http.Client{
 		Timeout: 60 * time.Second,
 		Transport: &http.Transport{
 			DialContext: func(ctx context.Context, _ string, address string) (net.Conn, error) {
-				return (&net.Dialer{Timeout: 8 * time.Second, Resolver: resolver}).DialContext(ctx, "tcp4", address)
+				return dialForwardTCP(ctx, resolver, address)
 			},
 			TLSClientConfig:     &tls.Config{MinVersion: tls.VersionTLS12, RootCAs: roots},
 			TLSHandshakeTimeout: 5 * time.Second,

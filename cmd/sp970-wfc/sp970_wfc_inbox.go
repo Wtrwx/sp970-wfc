@@ -102,3 +102,50 @@ func archiveNativeSMS(id int64, archive bool) error {
 	}
 	return privateJSON(adminBase+"/sms-archived.json", values)
 }
+
+func deleteNativeSMS(ctx context.Context, id int64) error {
+	return deleteSMSRecord(ctx, id, adminBase+"/sms-archived.json", func(ctx context.Context, args ...string) ([]byte, error) {
+		return exec.CommandContext(ctx, "/system/bin/sh", append([]string{"/system/bin/content"}, args...)...).CombinedOutput()
+	})
+}
+
+func deleteSMSRecord(ctx context.Context, id int64, archivePath string, run func(context.Context, ...string) ([]byte, error)) error {
+	// This KitKat SMS provider parses message IDs as signed 32-bit integers.
+	if id < 1 || id > 1<<31-1 {
+		return errors.New("短信标识无效")
+	}
+	// Use a single-message provider URI so Android also updates conversation
+	// metadata. Never construct a broad delete or bypass the provider with SQL.
+	out, err := run(ctx, "delete", "--uri", "content://sms/"+strconv.FormatInt(id, 10))
+	defer clear(out)
+	result := strings.TrimSpace(string(out))
+	if err != nil || (result != "" && result != "Deleted 1 rows." && result != "Deleted 0 rows.") {
+		return errors.New("无法删除短信")
+	}
+	// KitKat's content delete returns no success text. Query the same URI
+	// afterwards rather than treating an empty command response as failure.
+	check, err := run(ctx, "query", "--uri", "content://sms/"+strconv.FormatInt(id, 10), "--projection", "_id")
+	defer clear(check)
+	if err != nil || strings.TrimSpace(string(check)) != "No result found." {
+		return errors.New("无法删除短信")
+	}
+	// Also remove its archive marker, retaining every other message's state.
+	raw, err := os.ReadFile(archivePath)
+	if os.IsNotExist(err) {
+		return nil
+	}
+	defer clear(raw)
+	var archived map[string]bool
+	if err != nil || json.Unmarshal(raw, &archived) != nil {
+		return errors.New("短信已删除，但归档标记清理失败")
+	}
+	key := strconv.FormatInt(id, 10)
+	if _, exists := archived[key]; !exists {
+		return nil
+	}
+	delete(archived, key)
+	if privateJSON(archivePath, archived) != nil {
+		return errors.New("短信已删除，但归档标记清理失败")
+	}
+	return nil
+}

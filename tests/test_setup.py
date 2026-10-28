@@ -77,6 +77,24 @@ class NativeIntegrationTests(unittest.TestCase):
         self.assertEqual(patched.count("location /wfc-admin/"), 1)
         self.assertEqual(patch_nginx(patched), patched)
 
+    def test_unavailable_apis_do_not_use_the_stock_forbidden_error_page(self):
+        original = ("http {server {\nlocation / {root /system/var/www;}\n"
+                    "error_page 500 502 503 504 /50x.html;\n"
+                    "location = /50x.html {root html;}\n}}\n")
+        patched = patch_nginx(original)
+        for route in ("/wfc/", "/wfc-admin/"):
+            block = patched.split("location " + route + " {", 1)[1].split("}", 1)[0]
+            self.assertIn("error_page 502 503 504 =503 /wfc-unavailable.json;", block)
+        self.assertIn("default_type application/json;", patched)
+        self.assertIn("internal;", patched)
+        self.assertNotIn("return 503", patched)
+        self.assertIn("wfc-unavailable.json", CONSOLE_ASSETS)
+        fallback = Path(__file__).resolve().parents[1] / "web/wfc-unavailable.json"
+        self.assertTrue(json.loads(fallback.read_text())["error"])
+        self.assertIn("error_page 500 502 503 504 /50x.html;", patched)
+        self.assertEqual(patched.count("location = /wfc-unavailable.json"), 1)
+        self.assertEqual(patch_nginx(patched), patched)
+
     def test_console_owns_home_and_login_and_legacy_urls_share_the_same_app(self):
         root = Path(__file__).resolve().parents[1]
         self.assertIn("index.html", CONSOLE_ASSETS)
