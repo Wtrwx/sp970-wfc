@@ -6,7 +6,7 @@
   <meta name="color-scheme" content="light">
   <title>设备设置</title>
   <link rel="icon" href="data:,">
-  <link rel="stylesheet" href="/app.css?v=0.6.0-desktop1">
+  <link rel="stylesheet" href="/app.css?v=0.6.1-qr1">
 </head>
 <body data-page="app">
   <div id="app-loading" class="app-loading">
@@ -360,7 +360,13 @@
               <form id="euicc-add-form" novalidate>
                 <div class="form-field">
                   <label class="form-label" for="euicc-code" data-i18n="euicc.codeLabel">激活码</label>
-                  <input id="euicc-code" class="input mono" type="text" autocomplete="off" placeholder="LPA:1$smdp.address$matchingId" required>
+                  <div class="activation-code-row">
+                    <input id="euicc-code" class="input mono" type="text" autocomplete="off" placeholder="LPA:1$smdp.address$matchingId" required>
+                    <button id="euicc-qr-open" class="btn" type="button">
+                      <svg class="icon icon-sm" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="6" height="6" rx="1"></rect><rect x="15" y="3" width="6" height="6" rx="1"></rect><rect x="3" y="15" width="6" height="6" rx="1"></rect><path d="M15 15h3v3h3M15 21v-3M21 15v-3M12 3v3M3 12h3M9 12h3v3"></path></svg>
+                      <span data-i18n="euicc.qrScan">扫码添加</span>
+                    </button>
+                  </div>
                 </div>
                 <div class="form-grid-2" style="margin-top:12px">
                   <div class="form-field">
@@ -645,6 +651,27 @@
       </main>
     </div>
 
+    <div id="euicc-qr-modal" class="modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="euicc-qr-title" hidden>
+      <div class="modal-dialog qr-dialog">
+        <div class="modal-header qr-header">
+          <span id="euicc-qr-title" data-i18n="euicc.qrTitle">扫码添加 eSIM</span>
+          <button id="euicc-qr-close" class="btn btn-ghost qr-close" type="button" data-i18n-aria="common.close">
+            <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"></path></svg>
+          </button>
+        </div>
+        <div class="modal-body">
+          <div id="euicc-qr-preview" class="qr-preview" hidden><video id="euicc-qr-video" autoplay muted playsinline></video></div>
+          <p id="euicc-qr-status" class="qr-status" role="status" aria-live="polite"></p>
+          <p class="qr-privacy" data-i18n="euicc.qrPrivacy">二维码仅在浏览器内识别，确认后才会安装。</p>
+          <input id="euicc-qr-file" type="file" accept="image/*" hidden>
+        </div>
+        <div class="modal-footer qr-actions">
+          <button id="euicc-qr-camera" class="btn btn-primary" type="button"></button>
+          <button id="euicc-qr-image" class="btn" type="button"></button>
+        </div>
+      </div>
+    </div>
+
     <!-- Confirmation / Input Modal -->
     <div id="confirm-modal" class="modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="confirm-title" hidden>
       <div class="modal-dialog">
@@ -664,6 +691,7 @@
   </div>
 
   <script src="/forward-editor.js?v=0.6.0"></script>
-  <script src="/app.js?v=0.6.0-sms-delete3"></script>
+  <script src="/esim-qr.js?v=0.6.1-qr1"></script>
+  <script src="/app.js?v=0.6.1-qr1"></script>
 </body>
 </html>

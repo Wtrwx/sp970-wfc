@@ -147,6 +147,25 @@
         sectionTitle: "eSIM",
         addBtn: "添加 eSIM",
         codeLabel: "激活码",
+        qrScan: "扫码添加",
+        qrTitle: "扫码添加 eSIM",
+        qrCamera: "打开相机",
+        qrImage: "选择二维码图片",
+        qrPhotoImage: "拍照或选择二维码图片",
+        qrChoose: "打开相机扫码，或选择二维码图片。",
+        qrChoosePhoto: "拍照或选择相册里的 eSIM 二维码。",
+        qrPrivacy: "二维码仅在浏览器内识别，确认后才会安装。",
+        qrCameraOpening: "正在打开相机…",
+        qrAim: "将 eSIM 二维码放入取景框。",
+        qrPaused: "相机已暂停，可重新打开或选择图片。",
+        qrCameraError: "无法使用相机，请选择二维码图片。",
+        qrImageType: "请选择 20 MB 以内的二维码图片。",
+        qrReading: "正在识别二维码…",
+        qrNotFound: "未识别到二维码，请选择更清晰的图片。",
+        qrNotActivation: "这不是 eSIM 激活码二维码，请重新选择。",
+        qrReadError: "无法识别图片，请换一张图片或手动填写激活码。",
+        qrLoadError: "扫码组件加载失败，请刷新后重试。",
+        qrRecognized: "二维码已识别，请确认后安装。",
         nicknameOptional: "名称（可选）",
         confirmCodeOptional: "确认码（可选）",
         downloadBtn: "下载并安装",
@@ -412,6 +431,25 @@
         sectionTitle: "eSIM",
         addBtn: "Add eSIM",
         codeLabel: "Activation Code",
+        qrScan: "Scan QR Code",
+        qrTitle: "Scan eSIM QR Code",
+        qrCamera: "Open Camera",
+        qrImage: "Choose QR Image",
+        qrPhotoImage: "Take Photo or Choose QR Image",
+        qrChoose: "Open the camera or choose a QR code image.",
+        qrChoosePhoto: "Take a photo or choose an eSIM QR code from your photos.",
+        qrPrivacy: "QR codes are decoded in your browser. Installation requires confirmation.",
+        qrCameraOpening: "Opening camera…",
+        qrAim: "Point the camera at your eSIM QR code.",
+        qrPaused: "Camera paused. Reopen it or choose an image.",
+        qrCameraError: "Camera unavailable. Please choose a QR code image.",
+        qrImageType: "Choose a QR code image under 20 MB.",
+        qrReading: "Reading QR code…",
+        qrNotFound: "No QR code found. Please choose a clearer image.",
+        qrNotActivation: "This QR code is not an eSIM activation code.",
+        qrReadError: "Unable to read the image. Try another image or enter the code manually.",
+        qrLoadError: "Scanner failed to load. Refresh and try again.",
+        qrRecognized: "QR code recognized. Review it before installing.",
         nicknameOptional: "Label (Optional)",
         confirmCodeOptional: "Confirmation Code (Optional)",
         downloadBtn: "Download & Install",
@@ -1015,6 +1053,15 @@
   var smsData = null;
   var selectedSmsId = null;
   var mobileReading = false;
+  var esimQR = window.WfcEsimQR ? window.WfcEsimQR.create({
+    t: t,
+    onResult: function (code) {
+      el("euicc-add-drawer").hidden = false;
+      el("euicc-code").value = code;
+      el("euicc-code").focus();
+      setNotice("ok", "euicc.qrRecognized", true);
+    }
+  }) : null;
   var scannedWifi = null;
   var autoScannedOnce = false;
   var expandedWifiSsid = "";
@@ -2717,6 +2764,7 @@
   }
 
   function route() {
+    if (esimQR) esimQR.close();
     var resolved = normalizeRoute(location.hash);
     currentView = resolved.view;
     if (resolved.smsBox) {
@@ -2763,6 +2811,7 @@
     updatePageHeading();
     syncHotspotControls();
     editor.setLang(currentLang);
+    if (esimQR) esimQR.syncText();
     if (state) renderStatus(state, false);
     if (smsData) renderSMS(smsData);
     else syncSmsTabsUI();
@@ -2872,10 +2921,16 @@
     drawer.hidden = !drawer.hidden;
     if (!drawer.hidden) {
       el("euicc-code").focus();
-    }
+    } else if (esimQR) esimQR.close();
+  });
+
+  el("euicc-qr-open").addEventListener("click", function () {
+    if (esimQR) esimQR.open();
+    else setNotice("error", "euicc.qrLoadError", true);
   });
 
   el("euicc-add-cancel").addEventListener("click", function () {
+    if (esimQR) esimQR.close();
     el("euicc-add-drawer").hidden = true;
     el("euicc-code").value = "";
     el("euicc-new-nickname").value = "";
@@ -2884,6 +2939,7 @@
 
   el("euicc-add-form").addEventListener("submit", function (e) {
     e.preventDefault();
+    if (esimQR) esimQR.close();
     var code = el("euicc-code").value.trim();
     if (!code) {
       setNotice("error", "euicc.codeRequired", true);

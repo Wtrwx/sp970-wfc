@@ -39,6 +39,12 @@ This project includes the following separately attributed components:
    Provides Shadowsocks 2022 TCP/UDP encryption, replay checks and session handling.
    Its upstream license and dependency notices are included in release packages.
 
+6. jsQR v1.4.0, Apache-2.0.
+   https://github.com/cozmo/jsQR
+   Browser distribution from the official jsqr npm package, integrity verified:
+   sha512-dxLob7q65Xg2DvstYkRpkYtmKm2sPJ9oFhrhmudT1dZvNFFTlroai3AWSpLey/w5vMcLBXRgOJsbXpdN9HzU/A==
+   web/jsqr.js is unmodified; its license is retained in web/jsqr.LICENSE.
+
 No proprietary firmware APK, vendor libqmi.so binary, device SMS, SIM secrets,
 private proxy account, signing key, or hosted forwarding credential is included.
 The device's existing vendor library and account database are read at runtime.

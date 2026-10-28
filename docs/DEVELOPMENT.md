@@ -12,6 +12,7 @@ go test -race -count=1 ./cmd/sp970-wfc
 go vet ./cmd/sp970-wfc
 python3 -m unittest discover -s tests -v
 python3 -m unittest discover -s extras/sms-gateway -v
+node --test tests/esim-qr.test.cjs
 sh -n service/service-control.sh service/90-sp970-wfc.sh
 ```
 

@@ -23,7 +23,7 @@ BOOT = "/data/adb/service.d/90-sp970-wfc.sh"
 NGINX = "/system/etc/nginx/conf/nginx.conf"
 WWW = "/system/var/www"
 MARKER = "# SP970-WFC managed API"
-CONSOLE_ASSETS = ("index.html", "login.html", "app.js", "app.css", "forward-editor.js", "wfc-panel.html", "wfc-settings.html", "wfc-unavailable.json")
+CONSOLE_ASSETS = ("index.html", "login.html", "app.js", "app.css", "forward-editor.js", "esim-qr.js", "jsqr.js", "jsqr.LICENSE", "wfc-panel.html", "wfc-settings.html", "wfc-unavailable.json")
 LEGACY_ROUTES = {"sms-device.html": "sms", "sms-sim.html": "sms", "sms-set.html": "sms", "sms-forward.html": "forward"}
 
 
