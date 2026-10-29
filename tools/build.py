@@ -51,7 +51,7 @@ def main():
     env = os.environ.copy()
     env.update(GOTOOLCHAIN="local", GOWORK="off")
     if args.test:
-        run([args.go, "test", "-race", "-count=1", "./cmd/sp970-wfc"], cwd=ROOT, env=env)
+        run([args.go, "test", "-race", "-count=1", "./cmd/sp970-wfc", "./internal/nodesync", "./extras/spot-recovery/ip-sync"], cwd=ROOT, env=env)
         run(["python3", "-m", "unittest", "discover", "-s", "tests", "-v"], cwd=ROOT)
     target = env | {"GOOS": "linux", "GOARCH": "arm", "GOARM": "7", "CGO_ENABLED": "0"}
     run([args.go, "build", "-trimpath", "-buildvcs=false", "-ldflags", f"-s -w -X main.buildVersion={args.version}",
@@ -85,7 +85,7 @@ def main():
     # Include the exact corresponding source of both binaries in each release,
     # including pinned modules and their original license notices.
     source = payload / "source"
-    for relative in ("cmd", "native", "third_party", "patches", "go.mod", "go.sum", "LICENSE", "NOTICE", "tools", "tests", "setup.py", "service", "web", "examples", "extras", "data", "README.md", "SECURITY.md", "docs"):
+    for relative in ("cmd", "internal", "native", "third_party", "patches", "go.mod", "go.sum", "LICENSE", "NOTICE", "tools", "tests", "setup.py", "service", "web", "examples", "extras", "data", "README.md", "SECURITY.md", "docs"):
         copy(ROOT / relative, source / relative)
     licenses = payload / "THIRD_PARTY_LICENSES"
     licenses.mkdir(exist_ok=True)

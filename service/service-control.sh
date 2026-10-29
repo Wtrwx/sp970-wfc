@@ -23,6 +23,17 @@ WFC=$BASE/bin/sp970-wfc
 SSH=$BASE/bin/dropbearmulti
 export PATH=/system/bin:/system/xbin:/sbin
 export LD_LIBRARY_PATH=/system/vendor/lib:/system/lib
+export ANDROID_ROOT=/system ANDROID_DATA=/data
+# Tailscale/ordinary SSH can omit init's Java boot class path. app_process
+# then exits successfully without producing output on this KitKat firmware.
+# Read the device's own value; do not hardcode a vendor framework list.
+if [ -z "$BOOTCLASSPATH" ] && [ -r /init.environ.rc ]; then
+    BOOTCLASSPATH=$("$BB" awk '$1 == "export" && $2 == "BOOTCLASSPATH" {print $3;exit}' /init.environ.rc)
+fi
+if [ -z "$BOOTCLASSPATH" ] && [ -r /proc/1/environ ]; then
+    BOOTCLASSPATH=$("$BB" tr '\000' '\n' </proc/1/environ | "$BB" sed -n 's/^BOOTCLASSPATH=//p')
+fi
+export BOOTCLASSPATH
 
 mkdir -p "$RUN" "$LOG"
 chmod 700 "$BASE" "$RUN" "$LOG"

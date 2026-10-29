@@ -449,7 +449,10 @@ func saveNetwork(ctx context.Context, request networkSettings) error {
 	return nil
 }
 
-type adminHost struct{ mutations sync.Mutex }
+type adminHost struct {
+	mutations  sync.Mutex
+	ipSyncWake chan struct{}
+}
 
 func (h *adminHost) api(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
@@ -498,7 +501,10 @@ func (h *adminHost) api(w http.ResponseWriter, r *http.Request) {
 			state["proxy"] = proxySummary()
 			state["tailscale"] = tailscaleSummary(ctx)
 			state["ssh"] = sshSummary()
+			state["ip_sync"] = ipSyncSummaryAt(adminBase, time.Now())
 			response = state
+		case "/ip-sync":
+			response = ipSyncSummaryAt(adminBase, time.Now())
 		case "/wifi/scan":
 			response, err = androidCall(ctx, map[string]string{"action": "scan"})
 		case "/euicc":
@@ -522,6 +528,20 @@ func (h *adminHost) api(w http.ResponseWriter, r *http.Request) {
 		h.mutations.Lock()
 		defer h.mutations.Unlock()
 		switch r.URL.Path {
+		case "/ip-sync":
+			var v ipSyncSettings
+			if json.NewDecoder(r.Body).Decode(&v) != nil {
+				err = errors.New("订阅参数无效")
+				break
+			}
+			err = saveIPSyncSettings(adminBase, v)
+			if err == nil {
+				h.wakeIPSync()
+				response = ipSyncSummaryAt(adminBase, time.Now())
+			}
+		case "/ip-sync/check":
+			err = h.checkIPSyncLocked(ctx)
+			response = ipSyncSummaryAt(adminBase, time.Now())
 		case "/forward":
 			var config smsForwardConfig
 			if json.NewDecoder(r.Body).Decode(&config) != nil {
@@ -801,7 +821,9 @@ func serveAdmin(ctx context.Context) error {
 		return err
 	}
 	defer os.Remove(adminBase + "/run/admin.pid")
-	server := &http.Server{Handler: http.HandlerFunc((&adminHost{}).api), ReadHeaderTimeout: 5 * time.Second, ReadTimeout: 15 * time.Second, WriteTimeout: 200 * time.Second, IdleTimeout: 30 * time.Second, MaxHeaderBytes: 8192}
+	host := &adminHost{ipSyncWake: make(chan struct{}, 1)}
+	go host.ipSyncLoop(ctx)
+	server := &http.Server{Handler: http.HandlerFunc(host.api), ReadHeaderTimeout: 5 * time.Second, ReadTimeout: 15 * time.Second, WriteTimeout: 200 * time.Second, IdleTimeout: 30 * time.Second, MaxHeaderBytes: 8192}
 	go func() {
 		<-ctx.Done()
 		closeCtx, cancel := context.WithTimeout(context.Background(), 3*time.Second)

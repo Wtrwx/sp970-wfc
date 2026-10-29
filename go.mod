@@ -7,6 +7,7 @@ require (
 	github.com/iniwex5/vowifi-go v0.0.0
 	github.com/sagernet/sing v0.6.10
 	github.com/sagernet/sing-shadowsocks v0.2.8
+	gopkg.in/yaml.v3 v3.0.1
 )
 
 require (

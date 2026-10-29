@@ -229,6 +229,20 @@
         nodeLabel: "代理节点",
         wfcOnly: "仅代理 Wi-Fi Calling",
         wfcOnlyHint: "UDP 500/4500 走代理，其余直连",
+        ipSyncTitle: "节点订阅",
+        ipSyncAuto: "自动更新节点地址",
+        ipSyncSubscription: "订阅链接",
+        ipSyncHint: "支持 Mihomo YAML、sing-box JSON 和 SS 链接订阅，自动匹配当前 SS 节点。",
+        ipSyncInterval: "更新间隔",
+        ipSyncMinute: "1 分钟",
+        ipSyncFiveMinutes: "5 分钟",
+        ipSyncFifteenMinutes: "15 分钟",
+        ipSyncHour: "1 小时",
+        ipSyncLastCheck: "上次检查",
+        ipSyncCheck: "立即更新",
+        ipSyncSaved: "节点订阅已保存",
+        ipSyncChecked: "已完成订阅检查",
+        ipSyncStates: { unconfigured: "未配置", paused: "已暂停", waiting: "等待检查", unchanged: "地址未变化", updated: "IP 已更新", available: "发现新地址", skipped: "当前节点不匹配", error: "更新失败", stale: "检查未完成" },
         reset: "还原",
         savedNotice: "网络代理设置已保存"
       },
@@ -513,6 +527,20 @@
         nodeLabel: "Proxy Node",
         wfcOnly: "Proxy Wi-Fi Calling Only",
         wfcOnlyHint: "Proxy UDP 500/4500; use the local network for other traffic",
+        ipSyncTitle: "Node Subscription",
+        ipSyncAuto: "Update Node Address Automatically",
+        ipSyncSubscription: "Subscription URL",
+        ipSyncHint: "Supports Mihomo YAML, sing-box JSON and SS link subscriptions. Matches the current SS node automatically.",
+        ipSyncInterval: "Update Interval",
+        ipSyncMinute: "1 minute",
+        ipSyncFiveMinutes: "5 minutes",
+        ipSyncFifteenMinutes: "15 minutes",
+        ipSyncHour: "1 hour",
+        ipSyncLastCheck: "Last Checked",
+        ipSyncCheck: "Update Now",
+        ipSyncSaved: "Node subscription saved",
+        ipSyncChecked: "Subscription check completed",
+        ipSyncStates: { unconfigured: "Not configured", paused: "Paused", waiting: "Waiting", unchanged: "Address unchanged", updated: "IP updated", available: "New address available", skipped: "Different node selected", error: "Update failed", stale: "Check overdue" },
         reset: "Revert",
         savedNotice: "Proxy configuration saved"
       },
@@ -2195,6 +2223,7 @@
       el("proxy-wfc-only").checked = !!proxyInfo.wfc_only;
     }
     syncProxyControls();
+    renderIPSync(s.ip_sync || {}, fillForm);
 
     /* 7. #about View */
     setText("dev-model", s.model || "SP970-B");
@@ -3051,6 +3080,48 @@
   });
 
   /* Proxy Form (#vpn) */
+  var ipSyncDirty = false;
+  function renderIPSync(info, fillForm) {
+    if (fillForm || !ipSyncDirty) {
+      el("ip-sync-url").value = info.subscription_url || "";
+      el("ip-sync-interval").value = String(info.interval_seconds || 60);
+      el("ip-sync-enabled").checked = !!info.enabled;
+    }
+    setText("ip-sync-state", t("vpn.ipSyncStates." + (info.state || "unconfigured")));
+    setText("ip-sync-last-check", info.last_checked_at ? formatFullTime(info.last_checked_at) : "—");
+    setText("ip-sync-error", info.error || "");
+    el("ip-sync-error-box").hidden = !info.error;
+    if (!busyState) el("ip-sync-check").disabled = !info.configured || ipSyncDirty;
+  }
+  function dirtyIPSync() {
+    ipSyncDirty = true;
+    el("ip-sync-check").disabled = true;
+  }
+  el("ip-sync-form").addEventListener("input", dirtyIPSync);
+  el("ip-sync-form").addEventListener("change", dirtyIPSync);
+  el("ip-sync-form").addEventListener("submit", function (e) {
+    e.preventDefault();
+    busy(function () {
+      return request("ip-sync", {
+        enabled: el("ip-sync-enabled").checked,
+        subscription_url: el("ip-sync-url").value.trim(),
+        interval_seconds: Number(el("ip-sync-interval").value)
+      });
+    }).then(function (info) {
+      ipSyncDirty = false;
+      if (state) state.ip_sync = info;
+      renderIPSync(info, true);
+      setNotice("ok", "vpn.ipSyncSaved", true);
+    }).catch(function (err) { setNotice("error", err.message, false); });
+  });
+  el("ip-sync-check").addEventListener("click", function () {
+    busy(function () { return request("ip-sync/check", {}); }).then(function (info) {
+      if (state) state.ip_sync = info;
+      renderIPSync(info, false);
+      setNotice("ok", "vpn.ipSyncChecked", true);
+      return refreshStatus(false);
+    }).catch(function (err) { setNotice("error", err.message, false); });
+  });
   el("proxy-form").addEventListener("input", syncProxyControls);
   el("proxy-form").addEventListener("change", syncProxyControls);
 

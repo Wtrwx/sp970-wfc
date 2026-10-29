@@ -1,0 +1,28 @@
+[Unit]
+Description=Recover the pinned UK WFC Spot VM and publish its sing-box subscription
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=oneshot
+User=gcpuk
+Group=gcpuk
+ExecStart=/usr/bin/python3 /opt/gcp-uk-recovery/recover.py
+Environment=PYTHONDONTWRITEBYTECODE=1
+LoadCredential=gcp.json:/etc/gcp-uk-recovery/gcp.json
+LoadCredential=proxy.json:/etc/gcp-uk-recovery/proxy.json
+StateDirectory=gcp-uk-recovery
+StateDirectoryMode=0755
+UMask=0077
+TimeoutStartSec=55
+NoNewPrivileges=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectSystem=strict
+ProtectHome=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+ProtectClock=true
+RestrictSUIDSGID=true
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX

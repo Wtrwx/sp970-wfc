@@ -1,0 +1,6 @@
+handle /wfc-subscription-YOUR_TOKEN.json {
+    root * /var/lib/gcp-uk-recovery/public
+    header Cache-Control "no-store"
+    header X-Content-Type-Options "nosniff"
+    file_server
+}

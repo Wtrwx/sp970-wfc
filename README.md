@@ -8,13 +8,15 @@
 
 ## 界面预览
 
-简洁侧栏、中英双语，桌面端使用更宽的内容区和更大的控件；短信列表与阅读区随窗口高度展开，手机端保留独立适配。以下为当前 `main` 分支的界面，均使用演示数据，不含真实短信、号码或节点凭据；发布包以对应版本为准。
+简洁侧栏、中英双语，桌面端使用更宽的内容区和更大的控件；短信列表与阅读区随窗口高度展开，手机端保留独立适配。以下为当前 `main` 分支的界面，使用演示数据或已移除私有信息的预览，不含真实短信、号码或节点凭据；发布包以对应版本为准。
 
 ![桌面短信管理：收件箱、阅读、归档和单条删除](docs/images/desktop-sms.jpg)
 
 ![连接设置：飞行模式、WLAN、热点、Wi-Fi 通话与 Tailscale](docs/images/desktop-settings.jpg)
 
 ![添加 eSIM：相机扫码或选择二维码图片](docs/images/esim-qr.jpg)
+
+![节点订阅设置（局部）：订阅链接可编辑，已移除私有参数](docs/images/node-subscription.jpg)
 
 ## 支持范围
 
@@ -119,6 +121,8 @@ python3 setup.py status --serial YOUR_SERIAL --adb-host 127.0.0.1 --adb-port 150
 使用棒子上的代理时，**代理需要持续可用**，收发短信也通过隧道。可直接在“网络与 WFC”中更换节点；不需要维持同一个出口 IP。原生拨号、语音通话、iPhone 系统 WFC 转接均不在当前功能范围。
 
 控制台“VPN 与代理”可以粘贴 `ss://` 链接，支持旧版 `aes-128-gcm` / `aes-256-gcm`，以及 SS2022 的 `2022-blake3-aes-128-gcm`、`2022-blake3-aes-256-gcm`、`2022-blake3-chacha20-poly1305`。SS2022 使用对应长度的 Base64 密钥，保留 URL 编码的 `+`、`/` 和 `=`；不支持 SIP003 外置插件。默认 ePDG UDP 和 HTTPS 转发 TCP 都经过所选节点；对于只放行 IPsec 的 SS / SOCKS5 节点，开启“仅代理 Wi-Fi Calling”，只有 UDP 500/4500 经过节点，短信转发、eSIM 下载及其他请求使用本地网络。这是端口分流，无法区分同端口的其他 IPsec 流量。SS2022 时间校验要求设备时钟准确。安装向导仍先配置 Hysteria2 或直连，安装后可在控制台改用 SS。
+
+VPN 与代理页面可配置普通节点订阅，支持 Mihomo YAML、sing-box JSON 和 SS 链接，自动匹配当前 SS 节点并更新地址。自建 GCP Spot 节点可选用 [自动恢复与订阅更新](extras/spot-recovery/README.md)：由自己的持续在线 Linux 主机检查并启动原实例。支持身份联合，不要求 Google 服务账号私钥。该组件单独安装，不默认启用，不创建替代 VM，也不能保证 Spot 容量。
 
 ## 验证边界
 
